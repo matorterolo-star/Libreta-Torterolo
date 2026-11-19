@@ -184,10 +184,21 @@
           if (!conc) { var est = addDays(np[0], -GEST), best = null; sv.forEach(function (e) { var d = Math.abs(diffDays(e[0], est)); if (d <= 15 && (!best || d < best[1])) best = [e[0], d]; }); conc = best ? best[0] : est; }
         } else {
           var pos = h.ta.filter(function (t) { return t[0] > p[0] && esPren(t[1]); });
-          if (pos.length) { var T = pos[pos.length - 1][0], antes = sv.filter(function (e) { return e[0] <= T; }); conc = antes.length ? antes[antes.length - 1][0] : null; }
+          if (pos.length) { var T = pos[pos.length - 1][0], antes = sv.filter(function (e) { return e[0] <= T; }); conc = antes.length ? antes[antes.length - 1][0] : null;
+ }
         }
+        // preñeces perdidas: tacto positivo seguido de un servicio; la vaca está preñada desde la concepción hasta ese servicio
         var neg = h.ta.filter(function (t) { return t[0] > p[0] && t[0] < hasta && !esPren(t[1]); }).map(function (t) { return t[0]; });
-        return { p: p[0], n: p[1], np: np ? np[0] : null, conc: conc, sv: sv, neg: neg };
+        var perd = [];
+        h.ta.forEach(function (t) {
+          if (t[0] <= p[0] || t[0] >= hasta || !esPren(t[1])) return;
+          var desp = sv.filter(function (e) { return e[0] > t[0] && (!np || !conc || e[0] <= conc); }); if (!desp.length) return;
+          // termina con el primer servicio posterior o con un tacto vacía anterior a ese servicio
+          var f = desp[0][0]; neg.forEach(function (d) { if (d > t[0] && d < f) f = d; });
+          var ant = sv.filter(function (e) { return e[0] <= t[0]; });
+          perd.push({ c: ant.length ? ant[ant.length - 1][0] : addDays(t[0], -45), f: f });
+        });
+        return { p: p[0], n: p[1], np: np ? np[0] : null, conc: conc, sv: sv, neg: neg, perd: perd };
       });
       C.forEach(function (cy) {
         // lactancia en curso al inicio del ciclo
@@ -209,10 +220,14 @@
         // hasta que se la vuelva a servir; si después el tacto da vacía, cuenta para atrás
         var prev = null; L.sv.forEach(function (e) { if (e[0] < cy.ini) prev = e[0]; });
         var pendiente = prev && !L.conc && !L.sv.some(function (e) { return e[0] > prev; }) && !L.neg.some(function (d) { return d > prev && diffDays(d, prev) >= 25; });
-        var apta = !pendiente && diffDays(cy.fin, L.p) >= pev && (!L.conc || L.conc >= cy.ini) && (!x.salida || x.salida > cy.mid) && !(x.desc && x.desc <= cy.ini);
+        // preñada al inicio del ciclo con una preñez que después se perdió
+        var prenIni = L.perd.some(function (q) { return q.c < cy.ini && q.f >= cy.ini; });
+        // espera voluntaria con el día del parto incluido (como FOSAPP)
+        var apta = !pendiente && !prenIni && diffDays(cy.fin, L.p) + 1 >= pev && (!L.conc || L.conc >= cy.ini) && (!x.salida || x.salida > cy.mid) && !(x.desc && x.desc <= cy.ini);
         // como SysCaw: una vaca servida en el ciclo cuenta como apta aunque no haya cumplido la espera voluntaria
         var servCiclo = L.sv.some(function (e) { return e[0] >= cy.ini && e[0] <= cy.fin; });
-        if (!apta && servCiclo && (!L.conc || L.conc >= cy.ini)) apta = true;
+        // (también si estaba preñada de antes: servirla quiere decir que esa preñez se perdió)
+        if (!apta && servCiclo && (!L.conc || L.conc >= cy.ini || L.perd.some(function (q) { return q.c === L.conc; }))) apta = true;
         if (!apta) return;
         cy.aptas++;
         if (L.sv.some(function (e) { return e[0] >= cy.ini && e[0] <= cy.fin; })) cy.serv++;
@@ -2122,7 +2137,7 @@
           '<p class="cap ralhint">Tocá la concepción de un ciclo para verla por toro e inseminador' + (hayRojo ? ' (en los ⚠ en rojo, también el aviso)' : '') + '.</p>' +
           '<table class="tbl rtbl"><thead><tr><th>Ciclo</th><th>Aptas</th><th>Servicio</th><th>Concep.</th><th>Conc. máx.</th><th>Preñez</th></tr></thead><tbody>' + filas + '</tbody></table>' +
           ciclosPanelHTML(C, hab, habP) +
-          '<p class="cap">Vacas con al menos una lactancia (sin vaquillonas). <b>Aptas:</b> vacas vacías que cumplen ' + pev + ' días posparto dentro del ciclo, no marcadas como descarte programado y en el rodeo, más toda vaca servida en el ciclo aunque no haya cumplido la espera (como SysCaw). Una vaca servida en un ciclo anterior no es apta hasta que se la vuelva a servir o el tacto dé vacía (ahí cuenta para atrás). <b>Servicio:</b> aptas servidas / aptas. <b>Concepción:</b> servicios que preñaron / servicios con resultado conocido. <b>Conc. máx.:</b> lo mejor que puede dar el ciclo, contando como preñadas todas las servidas que no volvieron a servirse ni dieron vacía al tacto (no retorno). Solo cuenta servicios con al menos 24 días, para darles tiempo a repetir. <b style="color:var(--bad,#c0392b)">En rojo:</b> en los ciclos ya tactados (cerrados y con no más del 10% de sus servicios sin tacto) se marca la concepción; en los ciclos en curso o tactados en parte, la concepción máxima, cuando queda más de 10 puntos por debajo de la concepción habitual del tambo' + (habTxt ? ' (' + habTxt + ': ' + Math.round(hab) + '%)' : '') + '. <b>Alerta de toro o inseminador:</b> aparece cuando uno con 20 servicios o más en la temporada queda más de 10 puntos por debajo del resto en concepción máxima. <b>Preñez:</b> aptas que quedaron preñadas en el ciclo / aptas. Un ciclo queda <b>en curso</b> hasta que hay tacto 28 días después de que termina' + (C.ultTacto && C.ultTacto > '0000' ? ' (último tacto: ' + A.fmt(C.ultTacto) + ')' : '') + '.</p>' +
+          '<p class="cap">Vacas con al menos una lactancia (sin vaquillonas). <b>Aptas:</b> vacas vacías que cumplen ' + pev + ' días posparto dentro del ciclo (contando el día del parto), no marcadas como descarte programado y en el rodeo, más toda vaca servida en el ciclo aunque no haya cumplido la espera (como SysCaw). Las vendidas o muertas cuentan en los ciclos en que estaban en el rodeo a mitad del ciclo. Una vaca con tacto preñada que después se volvió a servir perdió esa preñez: no es apta mientras estaba preñada, y entra en el ciclo en que se la sirve. Una vaca servida en un ciclo anterior no es apta hasta que se la vuelva a servir o el tacto dé vacía (ahí cuenta para atrás). <b>Servicio:</b> aptas servidas / aptas. <b>Concepción:</b> servicios que preñaron / servicios con resultado conocido. <b>Conc. máx.:</b> lo mejor que puede dar el ciclo, contando como preñadas todas las servidas que no volvieron a servirse ni dieron vacía al tacto (no retorno). Solo cuenta servicios con al menos 24 días, para darles tiempo a repetir. <b style="color:var(--bad,#c0392b)">En rojo:</b> en los ciclos ya tactados (cerrados y con no más del 10% de sus servicios sin tacto) se marca la concepción; en los ciclos en curso o tactados en parte, la concepción máxima, cuando queda más de 10 puntos por debajo de la concepción habitual del tambo' + (habTxt ? ' (' + habTxt + ': ' + Math.round(hab) + '%)' : '') + '. <b>Alerta de toro o inseminador:</b> aparece cuando uno con 20 servicios o más en la temporada queda más de 10 puntos por debajo del resto en concepción máxima. <b>Preñez:</b> aptas que quedaron preñadas en el ciclo / aptas. Un ciclo queda <b>en curso</b> hasta que hay tacto 28 días después de que termina' + (C.ultTacto && C.ultTacto > '0000' ? ' (último tacto: ' + A.fmt(C.ultTacto) + ')' : '') + '.</p>' +
           '<button class="despbtn" data-a="repti" aria-expanded="' + !!state.repTI + '"><span>Concepción en el período por toro e inseminador</span><span class="chev">' + (state.repTI ? 'ocultar' : 'ver') + '</span></button>' +
           (state.repTI ? tiHTML(C.svs, 'Del ' + A.fmt(ini) + ' al ' + A.fmt(C[C.length - 1].fin < ref ? C[C.length - 1].fin : ref) + ' · ' + C.length + ' ciclos', 5, 'data-a="repti"') : '')
           : '<p class="hint">Elegí una fecha de inicio anterior al ' + A.fmt(ref) + '.</p>') + '</section>';
