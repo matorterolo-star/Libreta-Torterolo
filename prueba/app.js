@@ -1619,20 +1619,26 @@
       var i0 = 0, i1 = tot.length - 1; while (!tot[i1]) i1--;
       mv = mv.slice(i0, i1 + 1); mq = mq.slice(i0, i1 + 1); tot = tot.slice(i0, i1 + 1);
       var nM = mv.length, W = 320, H = 150, padx = 6, gap = 5, bw = Math.min((W - padx * 2 - gap * (nM - 1)) / nM, 40), s = '', k = (H - 48) / max;
-      var x0 = (W - (nM * bw + (nM - 1) * gap)) / 2;
+      var hayInc = false, x0 = (W - (nM * bw + (nM - 1) * gap)) / 2;
       mv.forEach(function (m, i) {
         var x = x0 + i * (bw + gap), base = H - 26, hv = m.n * k, hq = mq[i].n * k;
-        if (!mesReal(m)) { s += '<text class="mlbl" x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle">' + m.label + '</text>'; return; }
+        // mes incompleto (todavía puede haber preñeces sin confirmar): se muestran las confirmadas hasta hoy, rayadas
+        var inc = !mesReal(m);
+        if (inc && !tot[i]) { s += '<text class="mlbl" x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle">' + m.label + '</text>'; return; }
+        if (inc) hayInc = true;
         if (tot[i]) {
-          if (hv) s += '<rect class="mbv" x="' + x.toFixed(1) + '" y="' + (base - hv).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hv.toFixed(1) + '"><title>' + m.label + ': ' + m.n + ' vacas</title></rect>';
-          if (hq) s += '<rect class="mbq" x="' + x.toFixed(1) + '" y="' + (base - hv - hq).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hq.toFixed(1) + '"><title>' + m.label + ': ' + mq[i].n + ' vaquillonas</title></rect>';
-          s += numsDentro(x, bw, base, hv, hq, m.n, mq[i].n);
+          var cl = inc ? ' minc' : '', rz = function (y, h) { return inc ? '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="url(#mraya)"/>' : ''; }, hoy = inc ? ' confirmadas hasta hoy (mes incompleto)' : '';
+          if (hv) s += '<rect class="mbv' + cl + '" x="' + x.toFixed(1) + '" y="' + (base - hv).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hv.toFixed(1) + '"><title>' + m.label + ': ' + m.n + ' vacas' + hoy + '</title></rect>' + rz(base - hv, hv);
+          if (hq) s += '<rect class="mbq' + cl + '" x="' + x.toFixed(1) + '" y="' + (base - hv - hq).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hq.toFixed(1) + '"><title>' + m.label + ': ' + mq[i].n + ' vaquillonas' + hoy + '</title></rect>' + rz(base - hv - hq, hq);
+          if (!inc) s += numsDentro(x, bw, base, hv, hq, m.n, mq[i].n);
           s += '<text class="mval" x="' + (x + bw / 2).toFixed(1) + '" y="' + (base - hv - hq - 4).toFixed(1) + '" text-anchor="middle">' + tot[i] + '</text>';
         } else s += '<rect class="mzero" x="' + x.toFixed(1) + '" y="' + (H - 28) + '" width="' + bw.toFixed(1) + '" height="2" rx="1"/>';
         s += '<text class="mlbl" x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle">' + m.label + '</text>';
         if (m.label === 'ene' || i === 0) s += '<text class="myear" x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - 1) + '" text-anchor="middle">' + String(m.anio).slice(2) + '</text>';
       });
-      return '<svg class="mchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Partos probables por mes, vacas y vaquillonas">' + s + '</svg>';
+      return '<svg class="mchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Partos probables por mes, vacas y vaquillonas">' +
+        (hayInc ? '<defs><pattern id="mraya" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" class="mrz"/></pattern></defs>' : '') + s + '</svg>' +
+        (hayInc ? '<div class="mleg"><span><i class="minc"></i>Confirmadas hasta hoy, mes incompleto</span></div>' : '');
     }
     // Para secar en una fecha: vacas preñadas (no secas) que ese día están a SECADO días o menos del parto
     function fechaSecado() {
