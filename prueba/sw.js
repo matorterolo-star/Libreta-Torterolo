@@ -1,4 +1,4 @@
-const CACHE = 'prueba-v285';
+const CACHE = 'prueba-v286';
 const FILES = ['./', 'index.html', 'app.js?v=p276', 'xlsx.full.min.js', 'unrar.js', 'unrar-wasm.js', 'paradox.js?v=p95', 'syscaw.js?v=p175', 'fosapp.js?v=p223', 'manifest.webmanifest', 'icon2-192.png', 'icon2-512.png'];
 // al instalar, baja todo de nuevo (sin usar la memoria del navegador) para que no queden archivos de versiones distintas
 self.addEventListener('install', e => {

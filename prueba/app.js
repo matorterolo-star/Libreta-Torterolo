@@ -2070,6 +2070,7 @@
       if (!esVet() || esOperario() || !C.length) return '';
       var ab = state.cicloPq, sel = C.filter(function (c) { return c.n === ab; })[0];
       var cerr = C.filter(function (c) { return c.cerrado; });
+      var habAnt = habP != null;
       if (habP == null && cerr.length) { var a0 = 0, p0 = 0; cerr.forEach(function (c) { a0 += c.aptas; p0 += c.pren; }); if (a0) habP = p0 / a0 * 100; }
       var n = C.length, W = 320, H = 150, mt = 20, mb = 20, bw = Math.min(30, (W - 8) / n * 0.72), paso = (W - 8) / n;
       var mx = Math.max(20, habP || 0); cerr.forEach(function (c) { var v = c.aptas ? c.pren / c.aptas * 100 : 0; if (v > mx) mx = v; }); mx *= 1.12;
@@ -2090,7 +2091,7 @@
       });
       return '<div class="c21"><h3 class="vh3">Preñez por ciclo</h3><p class="c21t">Tocá una barra para ver por qué está de ese color</p>' +
         '<svg class="bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Preñez por ciclo de 21 días">' + g + '</svg>' +
-        '<p class="cap">Punteadas: ciclos sin tactar del todo o que todavía no terminaron. Verde, amarillo o rojo según la tasa de servicio y la concepción del ciclo.</p>' +
+        '<p class="cap">Punteadas: ciclos sin tactar del todo o que todavía no terminaron. Verde, amarillo o rojo según la tasa de servicio y la concepción del ciclo.' + (habAnt ? ' <b>Habitual:</b> la preñez de los mismos ciclos de la temporada anterior (preñadas / aptas).' : '') + '</p>' +
         (sel ? cicloPqHTML(sel, C.svs.filter(function (s) { return s.c === sel.n; }), hab) : '') + '</div>';
     }
     function repHTML() {
@@ -2108,7 +2109,10 @@
         var CA = A.ciclos21(an, esPren, iniAnt, pev, A.addDays(ini, -1)), ok = 0, mal = 0, na = 0;
         CA.svs.forEach(function (s) { if (s.r === 'ok') ok++; else if (s.r === 'mal') mal++; });
         if (ok + mal >= 30) { hab = ok / (ok + mal) * 100; habTxt = 'temporada ' + A.fmt(iniAnt).slice(-4); }
-        var apA = 0, prA = 0; CA.forEach(function (c) { if (c.cerrado) { apA += c.aptas; prA += c.pren; } }); if (apA >= 100) habP = prA / apA * 100;
+        // preñez habitual: los mismos ciclos de la temporada anterior (si van 7 ciclos cerrados, los ciclos 1 a 7),
+        // para no diluirla con los ciclos de verano y otoño sin servicios
+        var nAct = C.filter(function (c) { return c.cerrado; }).length || C.length;
+        var apA = 0, prA = 0; CA.forEach(function (c) { if (c.cerrado && c.n <= nAct) { apA += c.aptas; prA += c.pren; } }); if (apA >= 100) habP = prA / apA * 100;
       }
       if (hab == null && T.sOk + T.sMal) { hab = T.sOk / (T.sOk + T.sMal) * 100; habTxt = 'los ciclos cerrados de esta temporada'; }
       var hayRojo = false;
