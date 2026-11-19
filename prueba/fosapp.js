@@ -88,7 +88,7 @@
         var tp = D(id, 'TIPOPARTO', 'i').toUpperCase(), s1 = D(id, 'TERNEROSX1', 't').toUpperCase(), s2 = D(id, 'TERNEROSX2', 't').toUpperCase();
         var res = /ABORTO/.test(tp) ? 'A' : (s1 === 'H' || s1 === 'M' ? s1 : '') + (s2 === 'H' || s2 === 'M' ? '/' + s2 : '');
         g.pa.push([f, D(id, 'LACTANCIA', 'n') || 0, res, toro[D(id, 'PADREANIMALGUID', 't')] || '', null, null]);
-        if (/H/.test(res)) partosH.push({ mg: r[1], f: f, v: Object.keys(dato[id] || {}).map(function (k) { return String(dato[id][k].t || dato[id][k].i || '').trim(); }).filter(Boolean) });
+        if (/H/.test(res)) partosH.push({ mg: r[1], f: f, v: Object.keys(dato[id] || {}).map(function (k) { var o = dato[id][k]; return String(o.t || o.i || (/^TERNEROID/.test(k) && o.n ? o.n : '')).trim(); }).filter(Boolean) });
       } else if (t === T.SERVICIO) g.ev.push([f, 'S', toro[D(id, 'TOROGUID', 't')] || '', ins[D(id, 'INSEMINADORID', 'n')] || null]);
       else if (t === T.CELO) g.ev.push([f, 'C', '', null]);
       else if (t === T.TACTO) { var e = D(id, 'ESTADOVACA', 'n'); if (e) g.ta.push([f, e]); }
