@@ -1782,7 +1782,8 @@
     }
     /* ----- reproducción cada 21 días ----- */
     var PEVS = [40, 45, 50, 60];
-    function pevActual() { return state.pev || (DB.config && DB.config.pev) || 45; }
+    // espera voluntaria: la que eligió el veterinario para este tambo (queda guardada), si no la de la base, si no 45
+    function pevActual() { return state.pev || +getP('pev') || (DB.config && DB.config.pev) || 45; }
     // por defecto: el primer servicio a una vaca (con al menos un parto) desde el 1 de mayo de la zafra; el productor lo puede cambiar
     function iniZafra() {
       if (state.ini21def !== undefined && state.ini21def.db === DB) return state.ini21def.f;
@@ -5638,7 +5639,7 @@
       }
       if ((el = e.target.closest('[data-cat]'))) { state.cat = el.dataset.cat; state.filtro = 'todas'; state.n = 60; render(); return; }
       if ((el = e.target.closest('[data-f]'))) { state.filtro = el.dataset.f; state.n = 60; render(); return; }
-      if ((el = e.target.closest('[data-pev]'))) { state.pev = +el.dataset.pev; render(); return; }
+      if ((el = e.target.closest('[data-pev]'))) { state.pev = +el.dataset.pev; setP('pev', state.pev); render(); return; }
       if ((el = e.target.closest('[data-clper]'))) { state.clPer = el.dataset.clper; render(); return; }
       if ((el = e.target.closest('[data-clg]'))) { state.clG = +el.dataset.clg; render(); return; }
       if ((el = e.target.closest('[data-clmes]'))) { var cm = +el.dataset.clmes; state.clMes = state.clMes === cm ? null : cm; render(); return; }
