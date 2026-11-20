@@ -638,6 +638,14 @@
     var KEYT = 'libreta:tambos';
     var TAMBOS = { activo: null, lista: [] };
     var state = { tab: 'panel', q: '', filtro: 'todas', n: 60, rp: null, ventana: 183, abiertas: {}, error: '', persisted: true, draft: null, cat: 'vaca' };
+    // secciones plegables de Tareas y Rodeo (opción C): solo el título con la barra dorada; se abre una por vez
+    var CHEV_GRP = '<svg class="grpch" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    function grpPl(tab, t, html, extra) {
+      if (!html) return '';
+      var ab = !!state.grpAb && state.grpAb[tab] === t;
+      return '<button class="grp grpb" data-grp="' + tab + '" data-grpt="' + esc(t) + '" aria-expanded="' + ab + '"' + (t === 'Sanidad' ? ' id="sangrp"' : '') + '><span>' + t + '</span>' + CHEV_GRP + '</button>' +
+        (ab ? '<div class="glist">' + html + '</div>' + (extra || '') : '');
+    }
     var $ = function (s) { return document.querySelector(s); };
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var today = function () { return A.ymd(new Date()); };
@@ -1562,7 +1570,7 @@
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
-      var grp = function (t, html) { return '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>'; };
+      var grp = function (t, html) { return grpPl('tareas', t, html); };
       var lrow = function (a, t, d) { return '<button class="lrow" data-a="' + a + '"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="pttl"><h2>' + t + '</h2><small class="pdesc">' + d + '</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'; };
       return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + grp('Para hacer',
         (function () {
@@ -3027,7 +3035,7 @@
         (despues ? '<p class="cap">Además, ' + despues + ' después de ese período.</p>' : '') + '</section>';
       // orden: lo que pasó (partos, ordeñe y secas), lo que viene (partos, rodeo), y después índice, reproducción y línea de vida
       // agrupadas por tema; un grupo sin tarjetas no muestra su título
-      var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
+      var grp = function (t, html) { return grpPl('rodeo', t, html); };
       return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() +
         grp('Lo que pasó', partosOcHTML() + vovsHTML() + salTempHTML()) +
         grp('Lo que viene', lecturaHTML() + probables + proyHTML()) +
@@ -3052,7 +3060,7 @@
       }).join('') + '</tbody></table></section>' : '';
       // cada categoría muestra solo lo suyo; lo que es de todo el rodeo (partos por mes, ordeñe y secas, índice) queda en Todas.
       // mismo formato que Todas: grupos con título y tarjetas plegables en una lista
-      var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
+      var grp = function (t, html) { return grpPl('rodeo', t, html); };
       return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() +
         '<p class="grp">Estado</p><section class="card fijo"><h2>' + nf(r.total) + ' ' + nombreGrupo(r.total) + '</h2><div class="comp" role="img" aria-label="Composición del rodeo por estado">' + seg + '</div><div class="legend">' + leg + '</div></section>' +
         (state.cat === 'vaquillona' ? grp('Reproducción', vaqHTML()) : '') +
@@ -4207,7 +4215,7 @@
     }
     function sanTareasHTML() {
       var P = sanPlan(), vet = esVet();
-      if (!P) return vet ? '<p class="grp">Sanidad</p><div class="glist"><button class="lrow" data-a="saned"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="pttl"><h2>Armar plan sanitario</h2><small class="pdesc">Vacunas por etapa o por fecha, para este tambo</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>' : '';
+      if (!P) return vet ? grpPl('tareas', 'Sanidad', '<button class="lrow" data-a="saned"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="pttl"><h2>Armar plan sanitario</h2><small class="pdesc">Vacunas por etapa o por fecha, para este tambo</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>') : '';
       var hoy = today();
       var orden = function (o) { return o.L && o.L.length ? -1000 + (o.nEnt ? -100 : 0) : o.dias != null ? Math.max(o.dias, 0) : 9999; };
       // toda la lista en un solo desplegable; adentro, cada evento con su detalle y sus animales (sin plegar uno por uno)
@@ -4238,8 +4246,8 @@
       }).join('');
       var secs = secTareas('sanlista', 'Eventos del plan', blk, [], null, '', String(R.length));
       secs += sanCumpHTML(P);
-      return '<p class="grp" id="sangrp">Sanidad</p><div class="glist">' + sanCalHTML(P) + secs + '</div>' +
-        '<p class="cap" style="margin:6px 4px 0">Plan sanitario del Dr. Mauro Torterolo' + (P.f ? ', actualizado el ' + A.fmt(P.f) : '') + '. La lista muestra quiénes están en fecha según su etapa. Las vacunas del mes se marcan como hechas en el Panel y quedan guardadas en este teléfono.' + (vet ? ' <button class="lnk" data-a="saned">Editar plan</button>' : '') + '</p>';
+      return grpPl('tareas', 'Sanidad', sanCalHTML(P) + secs,
+        '<p class="cap" style="margin:6px 4px 0">Plan sanitario del Dr. Mauro Torterolo' + (P.f ? ', actualizado el ' + A.fmt(P.f) : '') + '. La lista muestra quiénes están en fecha según su etapa. Las vacunas del mes se marcan como hechas en el Panel y quedan guardadas en este teléfono.' + (vet ? ' <button class="lnk" data-a="saned">Editar plan</button>' : '') + '</p>');
     }
     /* ----- editor del plan (modo veterinario) ----- */
     // un evento solo (desde el calendario): i = índice en el plan; nuevo = evento a agregar
@@ -5684,6 +5692,12 @@
       }
       if ((el = e.target.closest('[data-cat]'))) { state.cat = el.dataset.cat; state.filtro = 'todas'; state.n = 60; render(); return; }
       if ((el = e.target.closest('[data-f]'))) { state.filtro = el.dataset.f; state.n = 60; render(); return; }
+      if ((el = e.target.closest('[data-grp]'))) {
+        state.grpAb = state.grpAb || {}; var gt = el.dataset.grpt, gk = el.dataset.grp;
+        state.grpAb[gk] = state.grpAb[gk] === gt ? null : gt; render();
+        var gb = document.querySelector('[data-grp="' + gk + '"][data-grpt="' + gt.replace(/"/g, '\\"') + '"]'); if (gb && state.grpAb[gk]) gb.scrollIntoView({ block: 'start' });
+        return;
+      }
       if ((el = e.target.closest('[data-pev]'))) { state.pev = +el.dataset.pev; setP('pev', state.pev); render(); return; }
       if ((el = e.target.closest('[data-clper]'))) { state.clPer = el.dataset.clper; render(); return; }
       if ((el = e.target.closest('[data-clg]'))) { state.clG = +el.dataset.clg; render(); return; }
@@ -5776,7 +5790,7 @@
         else if (confirm('¿Desmarcar esta vacuna?')) delete SO.v[sk]; else return;
         sanOkGuardar(SO); render();
       }
-      else if (a === 'sanir') { state.desp = state.desp || {}; state.desp.sancal = true; setTab('tareas'); setTimeout(function () { var g = $('#sangrp'); if (g) g.scrollIntoView(); }, 50); }
+      else if (a === 'sanir') { state.desp = state.desp || {}; state.desp.sancal = true; state.grpAb = state.grpAb || {}; state.grpAb.tareas = 'Sanidad'; setTab('tareas'); setTimeout(function () { var g = $('#sangrp'); if (g) g.scrollIntoView(); }, 50); }
       else if (a === 'informe') abrirInforme();
       else if (a === 'poblacion') abrirPoblacion();
       else if (a === 'pobvista') { state.pobVista = b.dataset.pv; render(); window.scrollTo(0, 0); }
