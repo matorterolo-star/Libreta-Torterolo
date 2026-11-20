@@ -638,27 +638,6 @@
     var KEYT = 'libreta:tambos';
     var TAMBOS = { activo: null, lista: [] };
     var state = { tab: 'panel', q: '', filtro: 'todas', n: 60, rp: null, ventana: 183, abiertas: {}, error: '', persisted: true, draft: null, cat: 'vaca' };
-    // secciones plegables de Tareas, Rodeo y Leche (opción A): cada sección es una fila dentro de una sola tarjeta,
-    // con una breve descripción; al tocarla se abre adentro de la misma tarjeta (una por vez)
-    var GRP_DESC = { 'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
-      'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Lo que viene': 'Lectura del tambo, partos y rodeo por mes', 'Reproducción': 'Ciclos de 21 días, celos y preñez', 'El rodeo': 'Vacas por año, índice y condición corporal',
-      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote y las que más bajaron' };
-    function grpPl(tab, t, html, extra) {
-      if (!html) return '';
-      var ab = !!state.grpAb && state.grpAb[tab] === t, d = GRP_DESC[t];
-      return '<button class="gsec' + (ab ? ' open' : '') + '" data-grp="' + tab + '" data-grpt="' + esc(t) + '" aria-expanded="' + ab + '"' + (t === 'Sanidad' ? ' id="sangrp"' : '') + '><span class="pttl"><h2>' + t + '</h2>' + (d && !ab ? '<small class="pdesc">' + d + '</small>' : '') + '</span>' +
-        '<svg class="chev" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
-        (ab ? '<div class="glist gsin">' + html + (extra || '') + '</div>' : '');
-    }
-    // junta las secciones seguidas en una sola tarjeta
-    function agruparSecs(main) {
-      var kids = Array.prototype.slice.call(main.children), caja = null, prev = null;
-      kids.forEach(function (c) {
-        if (!c.classList || !(c.classList.contains('gsec') || c.classList.contains('gsin'))) { caja = null; prev = null; return; }
-        if (!caja || c.previousElementSibling !== prev) { caja = document.createElement('div'); caja.className = 'glist gsecs'; c.parentNode.insertBefore(caja, c); }
-        caja.appendChild(c); prev = caja;
-      });
-    }
     var $ = function (s) { return document.querySelector(s); };
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var today = function () { return A.ymd(new Date()); };
@@ -1583,7 +1562,7 @@
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
-      var grp = function (t, html) { return grpPl('tareas', t, html); };
+      var grp = function (t, html) { return '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>'; };
       var lrow = function (a, t, d) { return '<button class="lrow" data-a="' + a + '"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="pttl"><h2>' + t + '</h2><small class="pdesc">' + d + '</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'; };
       return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + grp('Para hacer',
         (function () {
@@ -3048,12 +3027,25 @@
         (despues ? '<p class="cap">Además, ' + despues + ' después de ese período.</p>' : '') + '</section>';
       // orden: lo que pasó (partos, ordeñe y secas), lo que viene (partos, rodeo), y después índice, reproducción y línea de vida
       // agrupadas por tema; un grupo sin tarjetas no muestra su título
-      var grp = function (t, html) { return grpPl('rodeo', t, html); };
-      return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() +
-        grp('Lo que pasó', partosOcHTML() + vovsHTML() + salTempHTML()) +
-        grp('Lo que viene', lecturaHTML() + probables + proyHTML()) +
-        grp('Reproducción', repHTML() + celosPerdidosHTML() + (prenOK() ? prenHTML() : '')) +
-        grp('El rodeo', vacasAnioHTML() + idxCardHTML() + (prenOK() ? ccRodeoHTML() : '') + vidaHTML());
+      // mosaico (nov 2026): cuatro cuadros; cada uno abre su propia pantalla con Volver. Un tema sin tarjetas no aparece
+      var IC = {
+        'Lo que pasó': '<path d="M12 7v5l3 2M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4 4v4h4"/>',
+        'Reproducción': '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+        'Lo que viene': '<path d="M5 6h14v14H5zM5 10h14M9 3v4M15 3v4"/>',
+        'El rodeo': '<path d="M5 20V11M12 20V5M19 20v-7"/>' };
+      var DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición' };
+      var G = [['Lo que pasó', partosOcHTML() + vovsHTML() + salTempHTML()],
+        ['Reproducción', repHTML() + celosPerdidosHTML() + (prenOK() ? prenHTML() : '')],
+        ['Lo que viene', lecturaHTML() + probables + proyHTML()],
+        ['El rodeo', vacasAnioHTML() + idxCardHTML() + (prenOK() ? ccRodeoHTML() : '') + vidaHTML()]].filter(function (g) { return g[1]; });
+      var sel = G.filter(function (g) { return g[0] === state.rodSec; })[0];
+      if (sel) return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() +
+        '<button class="rvolver" data-rsec=""><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>' +
+        '<p class="grp">' + sel[0] + '</p><div class="glist">' + sel[1] + '</div>';
+      state.rodSec = null;
+      return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() + '<div class="mosaico">' + G.map(function (g) {
+        return '<button class="mtile" data-rsec="' + g[0] + '"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[g[0]] + '</svg><span><b>' + g[0] + '</b><small>' + DESC[g[0]] + '</small></span></button>';
+      }).join('') + '</div>';
     }
     function rodeoHTML() {
       if (state.cat === 'pren') state.cat = 'todas';
@@ -3073,7 +3065,7 @@
       }).join('') + '</tbody></table></section>' : '';
       // cada categoría muestra solo lo suyo; lo que es de todo el rodeo (partos por mes, ordeñe y secas, índice) queda en Todas.
       // mismo formato que Todas: grupos con título y tarjetas plegables en una lista
-      var grp = function (t, html) { return grpPl('rodeo', t, html); };
+      var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
       return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() +
         '<p class="grp">Estado</p><section class="card fijo"><h2>' + nf(r.total) + ' ' + nombreGrupo(r.total) + '</h2><div class="comp" role="img" aria-label="Composición del rodeo por estado">' + seg + '</div><div class="legend">' + leg + '</div></section>' +
         (state.cat === 'vaquillona' ? grp('Reproducción', vaqHTML()) : '') +
@@ -3942,7 +3934,7 @@
           return rowHTML(v.a, { right: '<span class="when ' + (d != null && d < 0 ? 'late' : 'ok') + '">' + nf(v.lt, 1) + ' L</span>',
             sub: (i + 1) + 'º · ' + (pv != null ? 'antes ' + nf(pv, 1) + ' L (' + (d >= 0 ? '+' : '−') + nf(Math.abs(d), 1) + ')' : 'sin control anterior') + ' · ' + v.del + ' días en leche · ' + (v.n === 1 ? '1ª lactancia' : v.n + 'ª lactancia') });
         }).join('') + '</section>';
-      var grp = function (t, html) { return grpPl('leche', t, html); };
+      var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
       return '<h1 class="ptitle">Leche</h1>' + res + grp('Evolución', evolHTML() + curvasHTML()) + grp('Las vacas', porLote + top5 + caida + tabla);
     }
 
@@ -4228,7 +4220,7 @@
     }
     function sanTareasHTML() {
       var P = sanPlan(), vet = esVet();
-      if (!P) return vet ? grpPl('tareas', 'Sanidad', '<button class="lrow" data-a="saned"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="pttl"><h2>Armar plan sanitario</h2><small class="pdesc">Vacunas por etapa o por fecha, para este tambo</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>') : '';
+      if (!P) return vet ? '<p class="grp">Sanidad</p><div class="glist"><button class="lrow" data-a="saned"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="pttl"><h2>Armar plan sanitario</h2><small class="pdesc">Vacunas por etapa o por fecha, para este tambo</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>' : '';
       var hoy = today();
       var orden = function (o) { return o.L && o.L.length ? -1000 + (o.nEnt ? -100 : 0) : o.dias != null ? Math.max(o.dias, 0) : 9999; };
       // toda la lista en un solo desplegable; adentro, cada evento con su detalle y sus animales (sin plegar uno por uno)
@@ -4259,8 +4251,8 @@
       }).join('');
       var secs = secTareas('sanlista', 'Eventos del plan', blk, [], null, '', String(R.length));
       secs += sanCumpHTML(P);
-      return grpPl('tareas', 'Sanidad', sanCalHTML(P) + secs,
-        '<p class="cap" style="margin:6px 4px 0">Plan sanitario del Dr. Mauro Torterolo' + (P.f ? ', actualizado el ' + A.fmt(P.f) : '') + '. La lista muestra quiénes están en fecha según su etapa. Las vacunas del mes se marcan como hechas en el Panel y quedan guardadas en este teléfono.' + (vet ? ' <button class="lnk" data-a="saned">Editar plan</button>' : '') + '</p>');
+      return '<p class="grp" id="sangrp">Sanidad</p><div class="glist">' + sanCalHTML(P) + secs + '</div>' +
+        '<p class="cap" style="margin:6px 4px 0">Plan sanitario del Dr. Mauro Torterolo' + (P.f ? ', actualizado el ' + A.fmt(P.f) : '') + '. La lista muestra quiénes están en fecha según su etapa. Las vacunas del mes se marcan como hechas en el Panel y quedan guardadas en este teléfono.' + (vet ? ' <button class="lnk" data-a="saned">Editar plan</button>' : '') + '</p>';
     }
     /* ----- editor del plan (modo veterinario) ----- */
     // un evento solo (desde el calendario): i = índice en el plan; nuevo = evento a agregar
@@ -5674,7 +5666,6 @@
       else if (state.tab === 'leche') { main.innerHTML = err + lecheHTML(); plegarFicha(main); vetCompartir(main); }
       else if (state.tab === 'panel' && panelOK()) { main.innerHTML = err + panelHTML(); vetCompartir(main); }
       else { main.innerHTML = err + buscarHTML(); updateResults(); }
-      if (state.tab === 'tareas' || state.tab === 'rodeo' || state.tab === 'leche') agruparSecs(main);
       plegarNotas(main);
     }
 
@@ -5706,12 +5697,7 @@
       }
       if ((el = e.target.closest('[data-cat]'))) { state.cat = el.dataset.cat; state.filtro = 'todas'; state.n = 60; render(); return; }
       if ((el = e.target.closest('[data-f]'))) { state.filtro = el.dataset.f; state.n = 60; render(); return; }
-      if ((el = e.target.closest('[data-grp]'))) {
-        state.grpAb = state.grpAb || {}; var gt = el.dataset.grpt, gk = el.dataset.grp;
-        state.grpAb[gk] = state.grpAb[gk] === gt ? null : gt; render();
-        var gb = document.querySelector('[data-grp="' + gk + '"][data-grpt="' + gt.replace(/"/g, '\\"') + '"]'); if (gb && state.grpAb[gk]) gb.scrollIntoView({ block: 'start' });
-        return;
-      }
+      if ((el = e.target.closest('[data-rsec]'))) { state.rodSec = el.dataset.rsec || null; render(); window.scrollTo(0, 0); return; }
       if ((el = e.target.closest('[data-pev]'))) { state.pev = +el.dataset.pev; setP('pev', state.pev); render(); return; }
       if ((el = e.target.closest('[data-clper]'))) { state.clPer = el.dataset.clper; render(); return; }
       if ((el = e.target.closest('[data-clg]'))) { state.clG = +el.dataset.clg; render(); return; }
@@ -5804,7 +5790,7 @@
         else if (confirm('¿Desmarcar esta vacuna?')) delete SO.v[sk]; else return;
         sanOkGuardar(SO); render();
       }
-      else if (a === 'sanir') { state.desp = state.desp || {}; state.desp.sancal = true; state.grpAb = state.grpAb || {}; state.grpAb.tareas = 'Sanidad'; setTab('tareas'); setTimeout(function () { var g = $('#sangrp'); if (g) g.scrollIntoView(); }, 50); }
+      else if (a === 'sanir') { state.desp = state.desp || {}; state.desp.sancal = true; setTab('tareas'); setTimeout(function () { var g = $('#sangrp'); if (g) g.scrollIntoView(); }, 50); }
       else if (a === 'informe') abrirInforme();
       else if (a === 'poblacion') abrirPoblacion();
       else if (a === 'pobvista') { state.pobVista = b.dataset.pv; render(); window.scrollTo(0, 0); }
