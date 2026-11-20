@@ -2302,7 +2302,7 @@
     function prenHTML() {
       if (!document.getElementById('pzCss')) {
         var st = document.createElement('style'); st.id = 'pzCss';
-        st.textContent = ':root{--pz1:#C9A227;--pz0:#12274A}@media (prefers-color-scheme:dark){:root{--pz1:#E3B84A;--pz0:#7FA8EE}}' +
+        st.textContent = ':root{--pz1:#C9A227;--pz0:#12274A}@media (prefers-color-scheme:dark){:root{--pz1:#E3B84A;--pz0:#7FA8EE}}html.tvet{--pz1:#2EC4B6;--pz0:#2B3034}@media (prefers-color-scheme:dark){html.tvet{--pz1:#3DD6C9;--pz0:#AEB6BB}}' +
           '.pzl{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}.pzl.pz1{stroke:var(--pz1);stroke-width:3}.pzl.pz0{stroke:var(--pz0);opacity:.75}.pzl.pzm{stroke:var(--pz1);stroke-dasharray:5 4;stroke-width:2}' +
           '.mleg i.pz1{background:var(--pz1)}.mleg i.pz0{background:var(--pz0);opacity:.75}.mleg i.pzm{background:transparent;border-top:2px dashed var(--pz1);border-radius:0;height:0;margin-top:5px}' +
           '.kpis small{display:block;font-size:11.5px;color:var(--muted);margin-top:3px;font-weight:500;line-height:1.3}.pztbl{font-size:14px;table-layout:fixed;width:100%}.pztbl th:first-child{width:36%}.pztbl th,.pztbl td{text-align:right;padding:7px 2px}.pztbl th:first-child,.pztbl td:first-child{text-align:left;white-space:normal}.pztbl td small{display:block}' +
@@ -3505,14 +3505,14 @@
     // arma una "hoja" para la imagen: encabezado, título, contexto, dato clave, contenido y firma
     function shHoja(titulo, ctx, clave, nodo, alto) {
       var conNom = shNombre(), w = document.createElement('div');
-      w.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;' + (alto ? 'min-height:' + alto + 'px;' : '') + 'box-sizing:border-box;padding:14px;background:#EEF2F7;color-scheme:light;font-family:var(--sans);display:flex;flex-direction:column;' +
-        '--bg:#EEF2F7;--surface:#FFFFFF;--ink:#0D1A33;--muted:#53627B;--line:#D3DBE7;--navy:#12274A;--on-navy:#FFFFFF;--gold:#C9A227;--link:#1F4FA3;--prenada:#16794A;--servida:#6B3FA0;--vacia:#B3261E;--ciclando:#2457A6;--apta:#8A6510;--sin:#53627B;--descarte:#B3261E;--bar:#9FB0CC;--bar-last:#12274A;--cl1:#C9A227;--cl2:#12274A;--clm:#0E7C86';
-      w.innerHTML = '<div style="background:#12274A;color:#fff;border-radius:14px;padding:12px 16px;margin-bottom:12px;border-bottom:4px solid #C9A227"><div style="font-size:12px;letter-spacing:.06em;color:#C9A227;font-weight:700">DR. MAURO TORTEROLO</div><div style="font-size:21px;font-weight:800;line-height:1.2">' + esc(conNom ? (PERFIL.nombre || 'Tambo') : 'Tambo') + '</div><div style="font-size:13px;opacity:.85">Datos al ' + A.fmt(DB.fecha || today()) + '</div></div>' +
-        '<div class="shcard" style="background:#fff;border:1px solid #D3DBE7;border-radius:16px;padding:14px 16px;flex:1"><div style="font-size:20px;font-weight:800;color:#0D1A33">' + esc(titulo) + '</div>' +
-        (ctx ? '<div style="font-size:14px;color:#53627B;font-weight:600;margin-top:2px">' + esc(ctx) + '</div>' : '') +
-        (clave ? '<div style="margin:8px 0 0;font-size:14px;font-weight:400;color:#0D1A33;line-height:1.45">' + clave.split('\n').map(esc).join('<br>') + '</div>' : '') +
+      w.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;' + (alto ? 'min-height:' + alto + 'px;' : '') + 'box-sizing:border-box;padding:14px;background:#F0F2F3;color-scheme:light;font-family:var(--sans);display:flex;flex-direction:column;' +
+        '--bg:#F0F2F3;--surface:#FFFFFF;--ink:#1F2427;--muted:#5C656C;--line:#D9DDE0;--navy:#2B3034;--on-navy:#FFFFFF;--gold:#2EC4B6;--link:#13877C;--prenada:#16794A;--servida:#6B3FA0;--vacia:#B3261E;--ciclando:#2457A6;--apta:#8A6510;--sin:#5C656C;--descarte:#B3261E;--bar:#AEB6BB;--bar-last:#2B3034;--cl1:#2EC4B6;--cl2:#2B3034;--clm:#0E7C86';
+      w.innerHTML = '<div style="background:#2B3034;color:#fff;border-radius:14px;padding:12px 16px;margin-bottom:12px;border-bottom:4px solid #2EC4B6"><div style="font-size:12px;letter-spacing:.06em;color:#3DD6C9;font-weight:700">DR. MAURO TORTEROLO</div><div style="font-size:21px;font-weight:800;line-height:1.2">' + esc(conNom ? (PERFIL.nombre || 'Tambo') : 'Tambo') + '</div><div style="font-size:13px;opacity:.85">Datos al ' + A.fmt(DB.fecha || today()) + '</div></div>' +
+        '<div class="shcard" style="background:#fff;border:1px solid #D9DDE0;border-radius:16px;padding:14px 16px;flex:1"><div style="font-size:20px;font-weight:800;color:#1F2427">' + esc(titulo) + '</div>' +
+        (ctx ? '<div style="font-size:14px;color:#5C656C;font-weight:600;margin-top:2px">' + esc(ctx) + '</div>' : '') +
+        (clave ? '<div style="margin:8px 0 0;font-size:14px;font-weight:400;color:#1F2427;line-height:1.45">' + clave.split('\n').map(esc).join('<br>') + '</div>' : '') +
         '<div class="shbody" style="margin-top:8px"></div></div>' +
-        '<div style="text-align:center;font-size:12px;color:#53627B;margin-top:10px">Libreta de vacas · Dr. Mauro Torterolo · ' + A.fmt(today()) + '</div>';
+        '<div style="text-align:center;font-size:12px;color:#5C656C;margin-top:10px">Libreta de vacas · Dr. Mauro Torterolo · ' + A.fmt(today()) + '</div>';
       w.querySelector('.shbody').appendChild(nodo);
       return w;
     }
@@ -3532,7 +3532,7 @@
     function shImagen(w) {
       document.body.appendChild(w);
       return cargarH2C().then(function (h2c) {
-        return h2c(w, { scale: 2.7, backgroundColor: '#EEF2F7', logging: false,
+        return h2c(w, { scale: 2.7, backgroundColor: '#F0F2F3', logging: false,
           onclone: function (doc) { Array.prototype.forEach.call(doc.styleSheets, function (sh) { var rs; try { rs = sh.cssRules; } catch (e) { return; } for (var q = rs.length - 1; q >= 0; q--) if (rs[q].media && /dark/.test(rs[q].media.mediaText)) sh.deleteRule(q); }); sinColorMix(doc); } });
       }).then(function (cv) { w.remove(); marcaAgua(cv); return new Promise(function (ok) { cv.toBlob(ok, 'image/png'); }); }, function (e) { w.remove(); throw e; });
     }
@@ -3623,7 +3623,7 @@
           // historial reproductivo: solo la última lactancia
           var lacs = c.querySelectorAll('details.lac'); Array.prototype.forEach.call(lacs, function (x, k) { if (k > 0) x.remove(); else x.setAttribute('open', ''); });
         }
-        c.style.cssText = 'margin:12px 0 0;border:1px solid #D3DBE7;border-radius:14px;padding:12px 14px;background:#fff'; d.appendChild(c);
+        c.style.cssText = 'margin:12px 0 0;border:1px solid #D9DDE0;border-radius:14px;padding:12px 14px;background:#fff'; d.appendChild(c);
       });
       var rp = state.rp || '', w = shHoja('Vaca ' + rp, '', '', d, 0);
       var tt = w.querySelector('.shcard > div'); if (tt) tt.remove(); // el encabezado de la ficha ya muestra la caravana
@@ -3861,7 +3861,7 @@
     }
     var CL_PER = [['12', 'Este año'], ['24', 'Año anterior'], ['h', 'Histórico']];
     function curvasHTML() {
-      if (!document.getElementById('clCss')) { var st = document.createElement('style'); st.id = 'clCss'; st.textContent = ':root{--cl1:#C9A227;--cl2:#12274A;--clm:#0E7C86}@media (prefers-color-scheme:dark){:root{--cl1:#E3B84A;--cl2:#7FA8EE;--clm:#5FD0D8}}.clp{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}.cltbl{font-size:14px}.cltbl th,.cltbl td{padding-left:4px;padding-right:4px}.cltbl td small{color:var(--muted);font-weight:600}.cltbl tr[data-clmes]{cursor:pointer}.cltbl tr.on td{background:color-mix(in srgb,var(--clm) 16%,transparent)}.clclave{margin:6px 0 0;font-size:14px;color:var(--ink);line-height:1.45}.cltbl td:first-child{white-space:nowrap}.cltbl td:first-child small{font-size:11px}.cltbl tr.clvac td,.cltbl tr.clpoco td{color:var(--muted)}.cltbl tr.clpoco td b{color:var(--muted)}.cltbl th small{font-weight:600}'; document.head.appendChild(st); }
+      if (!document.getElementById('clCss')) { var st = document.createElement('style'); st.id = 'clCss'; st.textContent = ':root{--cl1:#C9A227;--cl2:#12274A;--clm:#0E7C86}@media (prefers-color-scheme:dark){:root{--cl1:#E3B84A;--cl2:#7FA8EE;--clm:#5FD0D8}}html.tvet{--cl1:#2EC4B6;--cl2:#2B3034}@media (prefers-color-scheme:dark){html.tvet{--cl1:#3DD6C9;--cl2:#AEB6BB}}.clp{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}.cltbl{font-size:14px}.cltbl th,.cltbl td{padding-left:4px;padding-right:4px}.cltbl td small{color:var(--muted);font-weight:600}.cltbl tr[data-clmes]{cursor:pointer}.cltbl tr.on td{background:color-mix(in srgb,var(--clm) 16%,transparent)}.clclave{margin:6px 0 0;font-size:14px;color:var(--ink);line-height:1.45}.cltbl td:first-child{white-space:nowrap}.cltbl td:first-child small{font-size:11px}.cltbl tr.clvac td,.cltbl tr.clpoco td{color:var(--muted)}.cltbl tr.clpoco td b{color:var(--muted)}.cltbl th small{font-weight:600}'; document.head.appendChild(st); }
       var T = curvasTambo(); if (!T.L.length) return '';
       var per = state.clPer || '12', g = state.clG || 2, ref = (DB.fecha || today()).slice(0, 7);
       var mesesAtras = function (n) { var y = +ref.slice(0, 4), m = +ref.slice(5, 7) - n; while (m < 1) { m += 12; y--; } return y + '-' + pad2(m); };
