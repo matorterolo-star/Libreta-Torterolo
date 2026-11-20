@@ -5615,6 +5615,7 @@
       ['rodeo', 'Rodeo', '<path d="M5 20V11M12 20V4M19 20v-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>']
     ];
     function render() {
+      try { var tv = esVet(); document.documentElement.classList.toggle('tvet', tv); var mt = document.querySelector('meta[name=theme-color]'); if (mt) mt.content = tv ? '#2B3034' : '#12274A'; } catch (e) {}
       if (suspendido()) {
         var nv = $('#nav'); if (nv) nv.hidden = true; $('#ubtn').hidden = true; $('#tbtn').hidden = true; $('#meta').textContent = 'Acceso suspendido';
         $('#main').innerHTML = '<section class="empty"><div class="emptytag">' + LOGO_LIBRETA.replace('width="34" height="34"', 'width="72" height="72"') + '</div><h2>Acceso suspendido</h2></section>';
