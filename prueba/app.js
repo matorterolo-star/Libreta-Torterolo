@@ -3387,6 +3387,83 @@
         (h.vit ? '<p class="cap">Producción vitalicia: <b>' + nf(h.vit) + ' lts</b></p>' : '') + '</section>';
     }
 
+    // ----- ficha: franja de estado -----
+    var ATRASO_FICHA = 7, SIN_SERV_ROJO = 80;
+    // preñada con el parto probable pasado hace más de 7 días: lo ven todos (veterinario, productor y operario)
+    function atrasoFicha(a) {
+      if (a.estado !== 'prenada') return null;
+      var hoy = today(), pp = A.derive(a, hoy).partoProb || a.partoProb; if (!pp) return null;
+      var d = A.diffDays(hoy, pp); return d > ATRASO_FICHA ? { pp: pp, d: d } : null;
+    }
+    function edadTxt(fn, t) {
+      var m = Math.floor(A.diffDays(t, fn) / 30.44);
+      return m < 24 ? m + ' meses' : Math.floor(m / 12) + ' años' + (m % 12 ? ' y ' + (m % 12) + (m % 12 === 1 ? ' mes' : ' meses') : '');
+    }
+    function nroServ(n) { return n == null ? '' : n === 1 ? '1.er servicio' : n === 3 ? '3.er servicio' : n + '.º servicio'; }
+    // fecha · toro · inseminador · número de servicio del último servicio
+    function servTxt(a, h) {
+      if (!a.sFecha) return '';
+      var ins = null;
+      if (h) { var e = h.ev.filter(function (x) { return x[1] === 'S' && x[0] === a.sFecha; }).pop(); if (e && e[3]) ins = e[3]; }
+      var toro = a.toro && a.toro !== '???..' && !/^celo/i.test(a.toro) ? a.toro : null;
+      return [A.fmt(a.sFecha).slice(0, 5), toro, ins, nroServ(a.sN)].filter(Boolean).map(esc).join(' · ');
+    }
+    function festBar(dias, pp, seca, atr) {
+      // barra de la gestación: del servicio que la preñó al parto (283 días); marca de seca; si el parto ya pasó, tramo rojo hasta hoy
+      var W = 280, tot = A.GEST || 283, ext = atr ? Math.max(25, Math.min(60, atr.d)) : 0, esc2 = W / (tot + ext);
+      var xh = (atr ? tot + Math.min(atr.d, ext) : Math.min(dias, tot)) * esc2, xp = tot * esc2, xs = seca ? (tot - 60) * esc2 : null, s = '';
+      s += '<rect x="0" y="9" width="' + W + '" height="10" rx="5" class="fbt"/>';
+      if (atr) s += '<rect x="' + (xp - 5).toFixed(1) + '" y="9" width="' + (xh - xp + 5).toFixed(1) + '" height="10" rx="5" fill="var(--vacia)"/>';
+      s += '<rect x="0" y="9" width="' + Math.min(xh, xp).toFixed(1) + '" height="10" rx="5" class="fbf"/>';
+      if (xs != null) s += '<line x1="' + xs.toFixed(1) + '" y1="4" x2="' + xs.toFixed(1) + '" y2="24" stroke="var(--apta)" stroke-width="2"/><text x="' + xs.toFixed(1) + '" y="33" text-anchor="middle" class="fbl" fill="var(--apta)">seca</text>';
+      if (atr) s += '<line x1="' + xp.toFixed(1) + '" y1="7" x2="' + xp.toFixed(1) + '" y2="23" stroke="var(--ink)" stroke-width="1.5"/><text x="' + xp.toFixed(1) + '" y="33" text-anchor="middle" class="fbl" fill="var(--prenada)">parto</text><text x="' + Math.min(xh, W - 10).toFixed(1) + '" y="5" text-anchor="middle" class="fbl" fill="var(--vacia)">hoy</text>';
+      else {
+        var cerca = xs != null && Math.abs(xh - xs) < 26;
+        if (!(xh > W - 30)) s += '<text x="' + Math.max(10, xh).toFixed(1) + '" y="' + (cerca ? 6 : 33) + '" text-anchor="middle" class="fbl" fill="var(--ink)">hoy</text>';
+        s += '<text x="' + (W - 2) + '" y="33" text-anchor="end" class="fbl" fill="var(--prenada)">' + (xh > W - 30 ? 'a parir' : 'pare') + '</text>';
+      }
+      return '<svg class="fbar" viewBox="0 0 ' + W + ' 36" role="img" aria-label="Avance de la gestación">' + s + '</svg>';
+    }
+    function festHTML(a, d, h, t) {
+      if (a.cat === 'ternera') return '';
+      var col, tit, sub = '', extra = '', atr = atrasoFicha(a);
+      var sv = servTxt(a, h);
+      var tacto = a.tFecha ? 'tacto ' + A.fmt(a.tFecha).slice(0, 5) : '';
+      if (a.estado === 'prenada') {
+        var pp = d.partoProb, dias = pp ? (A.GEST || 283) - A.diffDays(pp, t) : null, seca = a.cat === 'seca';
+        var lpH = h && h.pa && h.pa.length ? h.pa[h.pa.length - 1] : null, secada = seca && lpH && lpH[5] && (!a.pFecha || lpH[5] > a.pFecha) ? lpH[5] : null;
+        if (atr) { col = 'vacia'; tit = 'Parto atrasado ' + atr.d + ' días'; sub = ['Debía parir el ' + A.fmt(pp).slice(0, 5), dias + ' días de preñez', sv].filter(Boolean).join(' · '); }
+        else { col = 'prenada'; tit = (dias != null ? dias + ' días de preñez' : 'Preñada') + (seca ? ' · seca' : ''); sub = [sv, tacto].filter(Boolean).join(' · '); }
+        if (pp && dias != null && dias >= 0) {
+          var conSeca = a.cat === 'vaca' || a.cat === 'seca' || !a.cat;
+          extra = festBar(dias, pp, conSeca, atr);
+          if (!atr) extra += '<div class="fdates"><span>' + (secada ? 'Se secó <b>' + A.fmt(secada).slice(0, 5) + '</b>' : conSeca && d.secado ? 'Secar <b>' + A.fmt(d.secado) + '</b>' : '') + '</span><span>' + (d.partoEstimado ? 'Parto estimado' : 'Parto') + ' <b>' + A.fmt(pp) + '</b></span></div>';
+        }
+      } else if (a.estado === 'servida') {
+        col = 'servida'; tit = 'Servida hace ' + d.diasServ + (d.diasServ === 1 ? ' día' : ' días'); sub = sv;
+      } else {
+        var desdeParto = a.pFecha ? A.diffDays(t, a.pFecha) : null;
+        var servLac = a.sFecha && (!a.pFecha || a.sFecha > a.pFecha) && !/^celo/i.test(a.toro || '');
+        var ultT = a.tFecha ? 'Último tacto ' + A.fmt(a.tFecha).slice(0, 5) + (a.result ? ' · ' + esc(a.result) : '') : '';
+        if (!servLac && desdeParto != null && a.cat !== 'vaquillona') {
+          col = desdeParto > SIN_SERV_ROJO ? 'vacia' : 'apta';
+          tit = 'Parida hace ' + desdeParto + ' días, sin servicio'; sub = ultT;
+        } else if (!servLac) {
+          col = 'sin'; tit = 'Sin servicio'; sub = ultT || (h && h.fn ? edadTxt(h.fn, t) : '');
+        } else {
+          col = a.estado === 'vacia' ? 'vacia' : a.estado === 'ciclando' ? 'ciclando' : a.estado === 'apta' ? 'apta' : 'sin';
+          tit = labelOf(a); sub = [a.tFecha ? 'Último tacto ' + A.fmt(a.tFecha).slice(0, 5) : '', a.sN ? a.sN + (a.sN === 1 ? ' servicio' : ' servicios') + ', el último ' + sv.replace(/ · \d+\.(er|º) servicio$/, '') : ''].filter(Boolean).join(' · ');
+        }
+      }
+      // descarte: el motivo es lo primero; el estado reproductivo baja a la línea chica
+      if (a.rech && !atr) {
+        var mot = a.rechDet || a.rech;
+        sub = [tit, sub].filter(Boolean).join(' · ');
+        col = 'vacia'; tit = 'Descarte' + (mot ? ' por ' + String(mot).toLowerCase() : '');
+        extra = '';
+      }
+      return '<section class="fest" style="--c:var(--' + col + ')"><div class="ftit">' + tit + '</div>' + (sub ? '<div class="fsub">' + sub + '</div>' : '') + extra + '</section>';
+    }
     function fichaBajaHTML(a) {
       var h = hist(a.key);
       var madre = h && h.ma ? (byRp(h.ma) ? '<button class="lnk" data-rp="' + esc(h.ma) + '">' + esc(h.ma) + '</button>' : esc(h.ma)) : null;
@@ -3426,33 +3503,22 @@
         // servicios anteriores al último (el último ya está en Toro), numerados desde el 1
         if (sl.length > 1) torosLac = '<span class="torl">' + sl.slice(0, -1).map(function (e, i) { return '<span><small class="nro">' + (i + 1) + 'º</small> ' + esc(e[2] || '?') + (e[3] ? ' <small>' + esc(e[3]) + '</small>' : '') + '</span>'; }).join('') + '</span>';
       }
-      var datos = kv([
-        ['Fecha de último parto', a.pFecha ? A.fmt(a.pFecha) : null],
-        // seca: cuánto duró la lactancia (del parto al secado), no los días desde el parto
-        (function () {
-          var lpH = h && h.pa && h.pa.length ? h.pa[h.pa.length - 1] : null, real = a.cat === 'seca' && lpH && lpH[5] && a.pFecha && lpH[5] > a.pFecha ? lpH[5] : null;
-          return real ? ['Días de lactancia', nf(A.diffDays(real, a.pFecha)) + ' <small>hasta el secado</small>'] : ['Días en lactancia', dLac != null ? nf(dLac) : null];
-        })(),
-        ['Fecha del último servicio', a.sFecha ? A.fmt(a.sFecha) : null],
-        ['Días del último servicio', a.sFecha ? String(A.diffDays(t, a.sFecha)) : null],
-        ['Número de servicio', a.sN != null ? String(a.sN) : null],
-        ['Toro / Insem.', toro],
-        ['Todos los servicios', torosLac],
-        ['Último tacto y resultado', tacto],
-        ['Parto probable', a.estado === 'prenada' && d.partoProb ? A.fmt(d.partoProb) + (d.partoEstimado ? ' <small>estimado</small>' : '') : null],
-        // seca: la fecha real del secado (del programa); en ordeñe y preñada: el secado que se estima según el parto probable
-        (function () {
-          var lpH = h && h.pa && h.pa.length ? h.pa[h.pa.length - 1] : null, real = lpH && lpH[5] && (!a.pFecha || lpH[5] > a.pFecha) ? lpH[5] : null;
-          if (a.cat === 'seca') return ['Secada', real ? A.fmt(real) + ' <small>hace ' + A.diffDays(today(), real) + ' días</small>' : null];
-          return ['Secado', a.estado === 'prenada' && d.secado && (a.cat === 'vaca' || !a.cat) ? A.fmt(d.secado) + ' <small>estimado</small>' : null];
-        })()
+      // franja de estado: lo principal de la vaca según su estado, de un vistazo (servicios y tactos anteriores quedan en el historial)
+      var fest = festHTML(a, d, h, t);
+      var esVaq = a.cat === 'vaquillona' || a.cat === 'ternera';
+      var datos = esVaq ? kv([
+        ['Nacimiento', h && h.fn ? A.fmt(h.fn) : null],
+        ['Edad', h && h.fn ? edadTxt(h.fn, t) : null]
+      ]) : kv([
+        ['Último parto', a.pFecha ? A.fmt(a.pFecha) : null],
+        ['Días de parida', a.pFecha ? nf(A.diffDays(t, a.pFecha)) : (dLac != null ? nf(dLac) : null)]
       ]);
       var madre = h && h.ma ? (byRp(h.ma) ? '<button class="lnk" data-rp="' + esc(h.ma) + '">' + esc(h.ma) + '</button>' : esc(h.ma)) : null;
       return '<button class="backbtn" data-a="back"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>' +
         // debajo de la caravana, una sola palabra: ordeñe, seca, vaquillona o ternera
         '<header class="fh"><div class="fhtag">' + tagSVG(a.rp, 118) + '<div class="fhlote" style="text-align:center;margin-top:6px;max-width:118px;font-size:15px;font-weight:700;line-height:1.2">' + (enPreparto(a) ? 'Preparto' : ({ vaca: 'Ordeñe', seca: 'Seca', vaquillona: 'Vaquillona', ternera: 'Ternera' }[a.cat] || '')) + '</div></div><div class="fhinfo"><div class="nm">' + esc(a.nombre || 'Sin nombre') + '</div>' +
-        '<div class="fhchips">' + chip(a) + (repetidora(a) ? SELLO_REP : '') + (a.rech ? '<span class="chip descarte">Descarte' + (a.rechDet || a.rech ? '<small>' + esc(a.rechDet || a.rech) + '</small>' : ' programado') + '</span>' : '') + (!esOperario() && paraVenta(a) ? '<span class="chip venta2">Para venta</span>' : '') + (function () { var pa = esVet() ? partoAtrasado(a) : null; return pa ? '<span class="chip venta2">Parto atrasado · ' + pa.d + ' días</span>' : ''; })() + '</div></div>' + idxBadge(a) + '</header>' +
-        (datos ? '<section class="card datos">' + datos + '</section>' : '') +
+        '<div class="fhchips">' + chip(a) + (repetidora(a) ? SELLO_REP : '') + (a.rech ? '<span class="chip descarte">Descarte</span>' : '') + (!esOperario() && paraVenta(a) ? '<span class="chip venta2">Para venta</span>' : '') + (atrasoFicha(a) ? '<span class="chip venta2">Parto atrasado</span>' : '') + '</div></div>' + idxBadge(a) + '</header>' +
+        fest + (datos ? '<section class="card datos">' + datos + '</section>' : '') +
         (h && h.ct.length ? '<section class="card"><h2>Control lechero</h2>' + prodHistHTML(a, h) + '</section>' : (bars(a.pr || []) ? '<section class="card"><h2>Control lechero</h2>' + bars(a.pr) + '</section>' : '')) +
         (h ? lactHTML(h) + (h.pa.length || h.ev.length || h.ta.length ? histHTML(a, h) : '') + ccHTML(h) : '') +
         idxFichaHTML(a) +
@@ -3600,7 +3666,7 @@
     function fichaImagen(conHist) {
       var ck = $('#shNom'); if (ck) try { localStorage.setItem('libreta:shnom', ck.checked ? '1' : '0'); } catch (e) {}
       $('#sheetX').hidden = true;
-      var main = $('#main'), fh = main && main.querySelector('header.fh'), dat = main && main.querySelector('section.card.datos'); if (!fh) return;
+      var main = $('#main'), fh = main && main.querySelector('header.fh'), fe = main && main.querySelector('section.fest'), dat = main && main.querySelector('section.card.datos'); if (!fh) return;
       var d = document.createElement('div'), h = fh.cloneNode(true);
       Array.prototype.forEach.call(h.querySelectorAll('.shic'), function (x) { x.remove(); });
       h.classList.remove('fhsh'); h.style.margin = '0 0 12px';
@@ -3608,6 +3674,7 @@
       var med = h.querySelector('.medalla'), inf = h.querySelector('.fhinfo');
       if (med && inf) { med.style.cssText = 'display:inline-flex;flex-direction:row;align-items:center;gap:8px;margin-top:10px'; inf.appendChild(med); }
       d.appendChild(h);
+      if (fe) { var cf = fe.cloneNode(true); cf.style.marginTop = '0'; d.appendChild(cf); }
       if (dat) { var c = dat.cloneNode(true); c.style.cssText = 'margin:0;box-shadow:none'; d.appendChild(c); }
       if (conHist) Array.prototype.forEach.call(main.querySelectorAll('.glist section.card'), function (sec) {
         var t = (sec.querySelector('h2') || {}).textContent || ''; if (!/^(Control lechero|Historial reproductivo)/.test(t)) return;
