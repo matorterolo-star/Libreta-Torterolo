@@ -280,6 +280,8 @@ main{padding-top:16px;padding-bottom:calc(92px + env(safe-area-inset-bottom,0px)
 .evp.cur{fill:var(--link)}.evp.prev{fill:var(--apta)}
 .evv{font-size:12px;font-weight:700;fill:var(--link)}
 .mleg i.ecur{background:var(--link)}.mleg i.eprev{background:var(--apta)}.mleg i.ehist{background:transparent;border-top:2px dashed var(--muted);border-radius:0;height:0;margin-top:5px}
+html.tvet{--ev-cur:#FF6A13;--ev-prev:#13877C}@media (prefers-color-scheme:dark){html.tvet{--ev-cur:#FF7A2E;--ev-prev:#3DD6C9}}
+html.tvet .ev.cur{stroke:var(--ev-cur)}html.tvet .ev.prev{stroke:var(--ev-prev);stroke-width:2.5}html.tvet .evp.cur,html.tvet .evv{fill:var(--ev-cur)}html.tvet .evp.prev{fill:var(--ev-prev)}html.tvet .mleg i.ecur{background:var(--ev-cur)}html.tvet .mleg i.eprev{background:var(--ev-prev)}
 .ptbl small.up{color:var(--prenada)}.ptbl small.dn{color:var(--vacia)}
 .card.plg .plgh{display:flex;align-items:center;gap:10px;cursor:pointer;margin:0}
 .card.plg .plgh h2{flex:1;margin:0}
@@ -813,6 +815,6 @@ details.lac summary .l{flex:1}
 <script src="fosapp.js?v=p223"></script>
 <script src="unrar.js"></script>
 <script src="unrar-wasm.js"></script>
-<script src="app.js?v=p283"></script>
+<script src="app.js?v=p284"></script>
 </body>
 </html>
