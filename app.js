@@ -377,7 +377,9 @@
   }
   function setSecado(n) { SECADO = n; api.SECADO = n; }
   /* ===== índice del tambo: reproducción (70%) + leche (30%), comparado contra el propio tambo ===== */
-  var IDX_W = { da: 30, spc: 15, pc: 10, pe: 15, le: 30 };
+  // parto a primer celo fuera del índice (nov 2026): la mayoría de los tambos no anota celos y ese tramo ya está en los días abiertos;
+  // se sigue calculando y la ficha lo muestra como dato, sin puntos. El anestro se mira en el ¿Por qué? de los ciclos de 21 días
+  var IDX_W = { da: 35, spc: 20, pc: 0, pe: 15, le: 30 };
   function idxMedia(v) { var s = 0; v.forEach(function (x) { s += x; }); return v.length ? s / v.length : null; }
   function idxDesv(v, m) { if (v.length < 2) return null; var s = 0; v.forEach(function (x) { s += (x - m) * (x - m); }); return Math.sqrt(s / (v.length - 1)); }
   function idxZ(x, m, sd) { if (x == null || !sd) return null; var z = (x - m) / sd; return Math.max(-3, Math.min(3, z)); }
@@ -573,7 +575,7 @@
     // celos poco anotados: el dato parto–primer celo pesa menos
     var cobCelo = nPc ? nCelo / nPc : 0;
     var w = { da: IDX_W.da, spc: IDX_W.spc, pc: IDX_W.pc * Math.min(1, cobCelo / 0.5), pe: IDX_W.pe, le: IDX_W.le };
-    var resto = IDX_W.pc - w.pc; w.da += resto * IDX_W.da / (IDX_W.da + IDX_W.spc); w.spc += resto * IDX_W.spc / (IDX_W.da + IDX_W.spc);
+    var resto = IDX_W.pc - w.pc; if (resto > 0) { w.da += resto * IDX_W.da / (IDX_W.da + IDX_W.spc); w.spc += resto * IDX_W.spc / (IDX_W.da + IDX_W.spc); }
     vacas.forEach(function (V) {
       V.m = { da: idxMedia(V.da), spc: idxMedia(V.spc), pc: idxMedia(V.pc), pe: V.gestConf ? V.perd / V.gestConf : null };
       var zs = V.le.map(function (r) { return r.z; }).filter(function (z) { return z != null; });
@@ -1560,7 +1562,7 @@
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
-      var grp = function (t, html) { return '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>'; };
+      var GT = [], grp = function (t, html) { if (html) GT.push([t, html]); return ''; };
       var lrow = function (a, t, d) { return '<button class="lrow" data-a="' + a + '"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="pttl"><h2>' + t + '</h2><small class="pdesc">' + d + '</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'; };
       return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + grp('Para hacer',
         (function () {
@@ -1586,7 +1588,7 @@
         grp('Gestión', secTareas('venta', 'Para venta', '<p class="secnote">Criterio: ' + esc(vtaTxt()) + '. <button class="lnk" data-a="vtacfg">Cambiar criterio</button></p>', DB.animales.filter(paraVenta).sort(function (x, y) { return x.pr[0] - y.pr[0]; }), function (a) {
           return rowHTML(a, { right: '<span class="vta">VENTA</span>', sub: nf(a.pr[0], 1) + ' lts · ' + nf(delDe(a)) + ' días en leche' + (a.rech ? ' · ' + esc(a.rechDet || a.rech) : '') });
         }, 'Ninguna vaca cumple el criterio de venta.') + insHTML()) +
-        (esOperario() ? '' : sanTareasHTML());
+        (function () { var sh = esOperario() ? '' : sanTareasHTML(); if (sh) GT.push(['Sanidad', sh, true]); return mosaicoHTML('tareas', GT); })();
     }
 
     /* ----- pestaña Rodeo ----- */
@@ -3010,6 +3012,34 @@
         L.map(function (l) { return '<div class="lln"><i class="ldot ' + l.c + '"></i><p><b>' + esc(l.t) + ':</b> ' + esc(l.x) + '</p></div>'; }).join('') +
         '<details class="nota"><summary>Cómo se calcula</summary><p class="cap">Estaciones: verano dic–feb, otoño mar–may, invierno jun–ago, primavera sep–nov. Partos: preñeces confirmadas por tacto, contra los partos reales de la misma estación del año anterior (si la estación todavía no está toda confirmada, se dice cuántos hay hasta ahora). Ordeñe: el mismo cálculo de "Rodeo por mes", promedio de la estación, contra el promedio real de la misma estación del año anterior. Tendencia: cada una de las últimas estaciones contra la misma del año anterior. Reposición: vacas con al menos un parto vendidas o muertas en los últimos 2 años, llevado a un año, contra las vaquillonas preñadas que figuran hoy en el programa. Verde: mejor que el año anterior o alcanza; rojo: peor o falta; amarillo: para mirar; gris: parecido.</p></details></section>';
     }
+    // mosaico de Rodeo, Tareas y Leche (nov 2026): cuadros grandes con un ícono de línea acorde al título;
+    // cada cuadro abre su propia pantalla con Volver
+    var MS_IC = {
+      'Lo que pasó': ['gr', '<rect x="4" y="6" width="20" height="18" rx="2.5"/><path d="M4 11h20M9 3.5v4M19 3.5v4M10 17l2.5 2.5L18 14"/>'],
+      'Reproducción': ['', '<g transform="translate(-1 2)"><path d="M5.2 7.5C3.2 6 1.2 6.4.6 8c1.2 1.6 3 2.2 4.8 1.8M14.8 7.5c2-1.5 4-1.1 4.6.5-1.2 1.6-3 2.2-4.8 1.8"/><path d="M5 7.8c0-2.4 2.2-4 5-4s5 1.6 5 4c0 2.6-1 5.2-1.6 8.2-.4 2-1.3 3.3-3.4 3.3s-3-1.3-3.4-3.3C6 13 5 10.4 5 7.8z"/><ellipse cx="10" cy="18.6" rx="3.6" ry="2.4"/></g><g transform="translate(20 2)"><path d="M5.2 7.5C3.2 6 1.2 6.4.6 8c1.2 1.6 3 2.2 4.8 1.8M14.8 7.5c2-1.5 4-1.1 4.6.5-1.2 1.6-3 2.2-4.8 1.8"/><path d="M5 7.8c0-2.4 2.2-4 5-4s5 1.6 5 4c0 2.6-1 5.2-1.6 8.2-.4 2-1.3 3.3-3.4 3.3s-3-1.3-3.4-3.3C6 13 5 10.4 5 7.8z"/><ellipse cx="10" cy="18.6" rx="3.6" ry="2.4"/></g>', '-1 1 41 23', 52],
+      'Lo que viene': ['', '<rect x="4" y="6" width="20" height="18" rx="2.5"/><path d="M4 11h20M9 3.5v4M19 3.5v4M8.5 15h2M8.5 19.5h2M13 15h2"/><circle cx="18" cy="18" r="2.6"/>'],
+      'El rodeo': ['', '<path d="M4 24h20M7.5 24v-8M14 24V6M20.5 24v-11"/>'],
+      'Para hacer': ['', '<rect x="5" y="5" width="18" height="20" rx="2.5"/><path d="M10.5 3.5h7v3h-7zM9 12l1.6 1.6L13.5 11M9 18.5l1.6 1.6 2.9-2.6M16 12.5h3.5M16 19h3.5"/>'],
+      'Listas para llevar': ['', '<rect x="4" y="4" width="17" height="20" rx="2"/><path d="M4 9.5h17M4 14.5h17M10.5 9.5V24M22 16v8M19 21l3 3 3-3"/>'],
+      'Gestión': ['', '<rect x="3" y="8" width="22" height="13" rx="2"/><circle cx="14" cy="14.5" r="3"/><path d="M7 11.5v.01M21 17.5v.01"/>'],
+      'Sanidad': ['', '<path d="M19.5 3.5l5 5M22 6l-3 3M18 7.5l2.5 2.5-10 10-4-4zM8.5 19.5L4 24M12 13.5l1.5 1.5M14.5 11l1.5 1.5"/>'],
+      'Evolución': ['', '<path d="M4 4v20h20M7.5 19l5-5.5 4 3 6.5-8M19.5 8.5H23V12"/>'],
+      'Las vacas': ['', '<path d="M6 10h16l-2 14H8zM6 10c0-3 3.5-5 8-5s8 2 8 5M14 13.5s-2.5 3-2.5 4.6a2.5 2.5 0 0 0 5 0c0-1.6-2.5-4.6-2.5-4.6z"/>'] };
+    var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición',
+      'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
+      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron' };
+    // G: [título, html, crudo] (crudo = el html ya trae su propio título)
+    function mosaicoHTML(tab, G) {
+      G = G.filter(function (g) { return g[1]; }); state.msec = state.msec || {};
+      var sel = G.filter(function (g) { return g[0] === state.msec[tab]; })[0];
+      if (sel) return '<button class="rvolver" data-msec="' + tab + '|"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>' +
+        (sel[2] ? sel[1] : '<p class="grp">' + sel[0] + '</p><div class="glist">' + sel[1] + '</div>');
+      state.msec[tab] = null;
+      return '<div class="mosaico">' + G.map(function (g) {
+        var ic = MS_IC[g[0]] || ['', ''];
+        return '<button class="mtile" data-msec="' + tab + '|' + g[0] + '"><svg class="' + ic[0] + '" viewBox="' + (ic[2] || '0 0 28 28') + '" width="' + (ic[3] || 30) + '" height="' + (ic[3] ? 32 : 30) + '" aria-hidden="true">' + ic[1] + '</svg><span><b>' + g[0] + '</b><small>' + (MS_DESC[g[0]] || '') + '</small></span></button>';
+      }).join('') + '</div>';
+    }
     function rodeoTodasHTML() {
       var h = today(), V = DB.animales.filter(function (a) { return a.cat === 'vaca' || a.cat === 'seca' || !a.cat; }), Q = DB.animales.filter(function (a) { return a.cat === 'vaquillona'; });
       var rv = A.resumen(V, h), rq = A.resumen(Q, h);
@@ -3025,12 +3055,12 @@
         (despues ? '<p class="cap">Además, ' + despues + ' después de ese período.</p>' : '') + '</section>';
       // orden: lo que pasó (partos, ordeñe y secas), lo que viene (partos, rodeo), y después índice, reproducción y línea de vida
       // agrupadas por tema; un grupo sin tarjetas no muestra su título
-      var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
-      return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() +
-        grp('Lo que pasó', partosOcHTML() + vovsHTML() + salTempHTML()) +
-        grp('Lo que viene', lecturaHTML() + probables + proyHTML()) +
-        grp('Reproducción', repHTML() + celosPerdidosHTML() + (prenOK() ? prenHTML() : '')) +
-        grp('El rodeo', vacasAnioHTML() + idxCardHTML() + (prenOK() ? ccRodeoHTML() : '') + vidaHTML());
+      // mosaico: cuatro cuadros que abren su propia pantalla con Volver; un tema sin tarjetas no aparece
+      var G = [['Lo que pasó', partosOcHTML() + vovsHTML() + salTempHTML()],
+        ['Reproducción', repHTML() + celosPerdidosHTML() + (prenOK() ? prenHTML() : '')],
+        ['Lo que viene', lecturaHTML() + probables + proyHTML()],
+        ['El rodeo', vacasAnioHTML() + idxCardHTML() + (prenOK() ? ccRodeoHTML() : '') + vidaHTML()]];
+      return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() + mosaicoHTML('rodeo', G);
     }
     function rodeoHTML() {
       if (state.cat === 'pren') state.cat = 'todas';
@@ -3110,19 +3140,60 @@
     }
     function idxNum(V) { return '<b class="ixn' + (V.tier ? ' ix-' + V.tier : '') + '">' + V.idx + '</b>'; }
     var MEDALLA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 2h8l-2 6h-4z" fill="currentColor" opacity=".55"/><circle cx="12" cy="15" r="6" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 12l.9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3z" fill="currentColor"/></svg>';
+    /* ----- índice por toro padre (solo veterinario): promedio de las hijas, reproducción y leche por separado ----- */
+    function padreDe(a) {
+      var h = DB.hist[a.rp]; if (!h) return null;
+      if (h.pd) return String(h.pd).trim() || null;
+      // sin padre en el animal (FOSAPP): el toro anotado en el parto de la madre en que nació
+      var hm = h.ma ? DB.hist[h.ma] : null, t = null;
+      if (hm && h.fn) (hm.pa || []).forEach(function (p) { if (!t && p[3] && Math.abs(A.diffDays(p[0], h.fn)) <= 7) t = String(p[3]).trim(); });
+      return t || null;
+    }
+    function idxTorosHTML(r) {
+      var G = {}, sinP = 0;
+      r.vacas.forEach(function (V) { var t = padreDe(V.a); if (!t) { sinP++; return; } (G[t] = G[t] || []).push(V); });
+      var rep = function (V) { var s = null; ['da', 'spc', 'pe'].forEach(function (k) { if (V.pts[k] != null) s = (s || 0) + V.pts[k]; }); return s; };
+      var prom = function (L, f) { var v = L.map(f).filter(function (x) { return x != null; }); return v.length ? v.reduce(function (a, b) { return a + b; }, 0) / v.length : null; };
+      var T = Object.keys(G).map(function (t) { var L = G[t]; return { t: t, L: L, n: L.length, ix: prom(L, function (V) { return V.idx; }), re: prom(L, rep), le: prom(L, function (V) { return V.pts.le; }) }; });
+      var V5 = T.filter(function (x) { return x.n >= 5; }).sort(function (a, b) { return b.ix - a.ix; }), chicos = T.length - V5.length;
+      var sel = state.idxToro && G[state.idxToro] ? state.idxToro : null;
+      if (sel) {
+        var X = T.filter(function (x) { return x.t === sel; })[0], H = G[sel].slice().sort(function (a, b) { return b.raw - a.raw; });
+        return '<button class="btn" data-a="ixtoros" style="margin:0 0 8px">‹ Todos los toros</button><p class="cap" style="margin:0 0 6px"><b>' + esc(sel) + '</b> · ' + X.n + (X.n === 1 ? ' hija' : ' hijas') + ' con índice · promedio ' + Math.round(X.ix) + '</p>' +
+          H.map(function (V) { return rowHTML(V.a, { right: idxNum(V), sub: V.puesto + 'º · ' + idxMini(V, r) }); }).join('');
+      }
+      var sg = function (v) { if (v == null) return '<span class="itc">–</span>'; var k = Math.round(v); return '<span class="itc ' + (k >= 1 ? 'up' : k <= -1 ? 'dn' : '') + '">' + (k > 0 ? '+' : k < 0 ? '−' : '') + Math.abs(k) + '</span>'; };
+      var out = !V5.length ? '<p class="cap">Ningún toro tiene todavía 5 hijas o más con índice en este tambo.</p>'
+        : '<div class="itor"><div class="ith"><span>Toro · hijas</span><span class="itc">Reprod.</span><span class="itc">Leche</span><span class="itc ix">Índice</span></div>' +
+          V5.map(function (x) { var k = Math.round(x.ix); return '<button class="itr" data-a="ixtoro" data-tor="' + esc(x.t) + '"><span class="itn"><b>' + esc(x.t) + '</b> <small>· ' + x.n + '</small></span>' + sg(x.re) + sg(x.le) + '<span class="itc ix ' + (k >= 101 ? 'up' : k <= 99 ? 'dn' : '') + '">' + k + '</span></button>'; }).join('') + '</div>';
+      // madres e hijas: hijas de madres del 10% mejor contra el resto, y la correlación entre los dos índices
+      var P = []; r.vacas.forEach(function (V) { var h = DB.hist[V.a.rp], M = h && h.ma ? r.por[h.ma] : null; if (M) P.push([M, V]); });
+      var nota = '';
+      if (P.length >= 15) {
+        var tp = P.filter(function (q) { return q[0].tier === 'top'; }), ot = P.filter(function (q) { return q[0].tier !== 'top'; });
+        var mx = prom(P, function (q) { return q[0].idx; }), my = prom(P, function (q) { return q[1].idx; }), sxy = 0, sxx = 0, syy = 0;
+        P.forEach(function (q) { var dx = q[0].idx - mx, dy = q[1].idx - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy; });
+        var cor = sxx && syy ? sxy / Math.sqrt(sxx * syy) : null;
+        if (tp.length >= 5 && ot.length >= 5) nota += 'Hijas de madres del 10% mejor: promedian ' + Math.round(prom(tp, function (q) { return q[1].idx; })) + ' (' + tp.length + '), contra ' + Math.round(prom(ot, function (q) { return q[1].idx; })) + ' del resto (' + ot.length + '). ';
+        if (cor != null) nota += 'Correlación entre el índice de la madre y el de la hija: ' + nf(cor, 2) + ' en ' + P.length + ' pares (' + (Math.abs(cor) < 0.1 ? 'casi nula' : Math.abs(cor) < 0.3 ? 'baja' : Math.abs(cor) < 0.5 ? 'moderada' : 'alta') + ').';
+      }
+      return out + (nota ? '<p class="cap" style="margin-top:10px">' + nota + '</p>' : '') +
+        '<p class="cap">Promedio del índice de las hijas de cada toro, con 5 hijas o más' + (chicos ? ' (' + chicos + (chicos === 1 ? ' toro con menos queda afuera' : ' toros con menos quedan afuera') + ')' : '') + '. Reproducción y leche: puntos promedio que suman o restan sus hijas. Con menos de 10 hijas la diferencia puede ser azar' + (sinP ? '; ' + sinP + ' vacas sin padre anotado' : '') + '.</p>';
+    }
     function idxCardHTML() {
       var r = IDX(); if (!r) return '';
       var ver = state.idxVer || 'top';
       var L = ver === 'top' ? r.vacas.slice(0, r.k10) : ver === 'peor' ? r.vacas.slice(-r.k10).reverse() : r.vacas;
       var lim = ver === 'todas' ? (state.idxN || 40) : L.length;
-      var chips = '<div class="filters" role="group" aria-label="Ranking">' + [['top', 'Mejores 10%'], ['peor', 'Peores 10%'], ['todas', 'Todas (' + r.n + ')']].map(function (v) {
+      var vet = esVet() && !esOperario(); if (ver === 'toro' && !vet) ver = 'top';
+      var chips = '<div class="filters" role="group" aria-label="Ranking">' + [['top', 'Mejores 10%'], ['peor', 'Peores 10%'], ['todas', 'Todas (' + r.n + ')']].concat(vet ? [['toro', 'Por toro']] : []).map(function (v) {
         return '<button class="fchip" data-iv="' + v[0] + '" aria-pressed="' + (ver === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
       return '<section class="card"><h2>Índice del tambo</h2>' +
-        '<p class="cap" style="margin:0 0 10px">100 = promedio de las ' + r.n + ' vacas de este tambo. Toda la vida de cada vaca: días abiertos, servicios por concepción, parto a primer celo y leche a 305 días (' + (r.usaSol ? 'comparada en kg de sólidos' : r.hayAn ? 'comparada en litros: los análisis de sólidos no son regulares' : 'en litros, sin análisis de sólidos') + ').</p>' + chips +
-        L.slice(0, lim).map(function (V) { return rowHTML(V.a, { right: idxNum(V), sub: (ver === 'todas' ? V.puesto + 'º · ' : '') + idxMini(V, r) }); }).join('') +
+        '<p class="cap" style="margin:0 0 10px">100 = promedio de las ' + r.n + ' vacas de este tambo. Toda la vida de cada vaca: días abiertos (35%), servicios por concepción (20%), pérdidas de gestación (15%) y leche a 305 días (30%, ' + (r.usaSol ? 'comparada en kg de sólidos' : r.hayAn ? 'comparada en litros: los análisis de sólidos no son regulares' : 'en litros, sin análisis de sólidos') + ').</p>' + chips +
+        (ver === 'toro' ? idxTorosHTML(r) : L.slice(0, lim).map(function (V) { return rowHTML(V.a, { right: idxNum(V), sub: (ver === 'todas' ? V.puesto + 'º · ' : '') + idxMini(V, r) }); }).join('')) +
         (L.length > lim ? '<button class="btn more" data-a="idxmas">Mostrar más (' + (L.length - lim) + ' restantes)</button>' : '') +
-        (r.celoBajo ? '<p class="cap">En este tambo se anotan pocos celos, así que el dato parto a primer celo pesa menos (' + Math.round(r.pesos.pc) + '%).</p>' : '') + '</section>';
+        '</section>';
     }
     function idxFichaHTML(a) {
       if (esOperario()) return '';
@@ -3141,6 +3212,8 @@
         return '<div class="ixc"><div class="ixl"><span>' + c[1] + ': <b>' + c[2] + '</b> <small>(tambo ' + c[3] + ')</small></span><b class="' + (p >= 0 ? 'up' : 'dn') + '">' + (p >= 0 ? '+' : '−') + nf(Math.abs(p), 1) + '</b></div>' +
           '<div class="ixt"><i class="' + (p >= 0 ? 'up' : 'dn') + '" style="' + (p >= 0 ? 'left:50%' : 'right:50%') + ';width:' + w.toFixed(1) + '%"></i></div></div>';
       }).join('');
+      // parto a primer celo o servicio: solo como dato, no suma ni resta puntos
+      if (V.m.pc != null) bar += '<div class="ixc"><div class="ixl"><span>Parto a primer celo o servicio: <b>' + nf1(V.m.pc) + ' d</b> <small>(tambo ' + nf(r.prom.pc) + ')</small></span><small class="ixinf" style="white-space:nowrap">sin puntos</small></div></div>';
       return '<section class="card"><div class="ixhead"><h2>Índice del tambo</h2>' + idxNum(V) + '</div>' +
         '<p class="cap" style="margin:-4px 0 8px">Puesto ' + V.puesto + ' de ' + r.n + (V.mejorQue != null ? ' · mejor que el ' + Math.min(99, V.mejorQue) + '% de las vacas del tambo' : '') + ' · ' + V.nLac + (V.nLac === 1 ? ' lactancia evaluada' : ' lactancias evaluadas') + (V.conf < 1 ? ' (cuenta ' + Math.round(V.conf * 100) + '% hasta tener 3)' : '') + '</p>' + bar +
         '<p class="cap">' + (r.usaSol ? 'La leche se compara en kg de sólidos.' : 'La leche se compara en litros' + (r.hayAn ? ' (en este tambo los análisis de sólidos no son regulares).' : '.')) +
@@ -3432,14 +3505,14 @@
     // arma una "hoja" para la imagen: encabezado, título, contexto, dato clave, contenido y firma
     function shHoja(titulo, ctx, clave, nodo, alto) {
       var conNom = shNombre(), w = document.createElement('div');
-      w.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;' + (alto ? 'min-height:' + alto + 'px;' : '') + 'box-sizing:border-box;padding:14px;background:#EEF2F7;color-scheme:light;font-family:var(--sans);display:flex;flex-direction:column;' +
-        '--bg:#EEF2F7;--surface:#FFFFFF;--ink:#0D1A33;--muted:#53627B;--line:#D3DBE7;--navy:#12274A;--on-navy:#FFFFFF;--gold:#C9A227;--link:#1F4FA3;--prenada:#16794A;--servida:#6B3FA0;--vacia:#B3261E;--ciclando:#2457A6;--apta:#8A6510;--sin:#53627B;--descarte:#B3261E;--bar:#9FB0CC;--bar-last:#12274A;--cl1:#C9A227;--cl2:#12274A;--clm:#0E7C86';
-      w.innerHTML = '<div style="background:#12274A;color:#fff;border-radius:14px;padding:12px 16px;margin-bottom:12px;border-bottom:4px solid #C9A227"><div style="font-size:12px;letter-spacing:.06em;color:#C9A227;font-weight:700">DR. MAURO TORTEROLO</div><div style="font-size:21px;font-weight:800;line-height:1.2">' + esc(conNom ? (PERFIL.nombre || 'Tambo') : 'Tambo') + '</div><div style="font-size:13px;opacity:.85">Datos al ' + A.fmt(DB.fecha || today()) + '</div></div>' +
-        '<div class="shcard" style="background:#fff;border:1px solid #D3DBE7;border-radius:16px;padding:14px 16px;flex:1"><div style="font-size:20px;font-weight:800;color:#0D1A33">' + esc(titulo) + '</div>' +
-        (ctx ? '<div style="font-size:14px;color:#53627B;font-weight:600;margin-top:2px">' + esc(ctx) + '</div>' : '') +
-        (clave ? '<div style="margin:8px 0 0;font-size:14px;font-weight:400;color:#0D1A33;line-height:1.45">' + clave.split('\n').map(esc).join('<br>') + '</div>' : '') +
+      w.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;' + (alto ? 'min-height:' + alto + 'px;' : '') + 'box-sizing:border-box;padding:14px;background:#F0F2F3;color-scheme:light;font-family:var(--sans);display:flex;flex-direction:column;' +
+        '--bg:#F0F2F3;--surface:#FFFFFF;--ink:#1F2427;--muted:#5C656C;--line:#D9DDE0;--navy:#2B3034;--on-navy:#FFFFFF;--gold:#2EC4B6;--link:#13877C;--prenada:#16794A;--servida:#6B3FA0;--vacia:#B3261E;--ciclando:#2457A6;--apta:#8A6510;--sin:#5C656C;--descarte:#B3261E;--bar:#9FB0CC;--bar-last:#12274A;--cl1:#C9A227;--cl2:#12274A;--clm:#0E7C86;--medal:#C9A227';
+      w.innerHTML = '<div style="background:#2B3034;color:#fff;border-radius:14px;padding:12px 16px;margin-bottom:12px;border-bottom:4px solid #2EC4B6"><div style="font-size:12px;letter-spacing:.06em;color:#3DD6C9;font-weight:700">DR. MAURO TORTEROLO</div><div style="font-size:21px;font-weight:800;line-height:1.2">' + esc(conNom ? (PERFIL.nombre || 'Tambo') : 'Tambo') + '</div><div style="font-size:13px;opacity:.85">Datos al ' + A.fmt(DB.fecha || today()) + '</div></div>' +
+        '<div class="shcard" style="background:#fff;border:1px solid #D9DDE0;border-radius:16px;padding:14px 16px;flex:1"><div style="font-size:20px;font-weight:800;color:#1F2427">' + esc(titulo) + '</div>' +
+        (ctx ? '<div style="font-size:14px;color:#5C656C;font-weight:600;margin-top:2px">' + esc(ctx) + '</div>' : '') +
+        (clave ? '<div style="margin:8px 0 0;font-size:14px;font-weight:400;color:#1F2427;line-height:1.45">' + clave.split('\n').map(esc).join('<br>') + '</div>' : '') +
         '<div class="shbody" style="margin-top:8px"></div></div>' +
-        '<div style="text-align:center;font-size:12px;color:#53627B;margin-top:10px">Libreta de vacas · Dr. Mauro Torterolo · ' + A.fmt(today()) + '</div>';
+        '<div style="text-align:center;font-size:12px;color:#5C656C;margin-top:10px">Libreta de vacas · Dr. Mauro Torterolo · ' + A.fmt(today()) + '</div>';
       w.querySelector('.shbody').appendChild(nodo);
       return w;
     }
@@ -3459,7 +3532,7 @@
     function shImagen(w) {
       document.body.appendChild(w);
       return cargarH2C().then(function (h2c) {
-        return h2c(w, { scale: 2.7, backgroundColor: '#EEF2F7', logging: false,
+        return h2c(w, { scale: 2.7, backgroundColor: '#F0F2F3', logging: false,
           onclone: function (doc) { Array.prototype.forEach.call(doc.styleSheets, function (sh) { var rs; try { rs = sh.cssRules; } catch (e) { return; } for (var q = rs.length - 1; q >= 0; q--) if (rs[q].media && /dark/.test(rs[q].media.mediaText)) sh.deleteRule(q); }); sinColorMix(doc); } });
       }).then(function (cv) { w.remove(); marcaAgua(cv); return new Promise(function (ok) { cv.toBlob(ok, 'image/png'); }); }, function (e) { w.remove(); throw e; });
     }
@@ -3550,7 +3623,7 @@
           // historial reproductivo: solo la última lactancia
           var lacs = c.querySelectorAll('details.lac'); Array.prototype.forEach.call(lacs, function (x, k) { if (k > 0) x.remove(); else x.setAttribute('open', ''); });
         }
-        c.style.cssText = 'margin:12px 0 0;border:1px solid #D3DBE7;border-radius:14px;padding:12px 14px;background:#fff'; d.appendChild(c);
+        c.style.cssText = 'margin:12px 0 0;border:1px solid #D9DDE0;border-radius:14px;padding:12px 14px;background:#fff'; d.appendChild(c);
       });
       var rp = state.rp || '', w = shHoja('Vaca ' + rp, '', '', d, 0);
       var tt = w.querySelector('.shcard > div'); if (tt) tt.remove(); // el encabezado de la ficha ya muestra la caravana
@@ -3877,7 +3950,7 @@
             sub: (i + 1) + 'º · ' + (pv != null ? 'antes ' + nf(pv, 1) + ' L (' + (d >= 0 ? '+' : '−') + nf(Math.abs(d), 1) + ')' : 'sin control anterior') + ' · ' + v.del + ' días en leche · ' + (v.n === 1 ? '1ª lactancia' : v.n + 'ª lactancia') });
         }).join('') + '</section>';
       var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
-      return '<h1 class="ptitle">Leche</h1>' + res + grp('Evolución', evolHTML() + curvasHTML()) + grp('Las vacas', porLote + top5 + caida + tabla);
+      return '<h1 class="ptitle">Leche</h1>' + res + mosaicoHTML('leche', [['Evolución', evolHTML() + curvasHTML()], ['Las vacas', porLote + top5 + caida + tabla]]);
     }
 
     /* ----- activación por tambo: links firmados por el Dr. Mauro Torterolo ----- */
@@ -5542,6 +5615,7 @@
       ['rodeo', 'Rodeo', '<path d="M5 20V11M12 20V4M19 20v-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>']
     ];
     function render() {
+      try { var tv = esVet(); document.documentElement.classList.toggle('tvet', tv); var mt = document.querySelector('meta[name=theme-color]'); if (mt) mt.content = tv ? '#2B3034' : '#12274A'; } catch (e) {}
       if (suspendido()) {
         var nv = $('#nav'); if (nv) nv.hidden = true; $('#ubtn').hidden = true; $('#tbtn').hidden = true; $('#meta').textContent = 'Acceso suspendido';
         $('#main').innerHTML = '<section class="empty"><div class="emptytag">' + LOGO_LIBRETA.replace('width="34" height="34"', 'width="72" height="72"') + '</div><h2>Acceso suspendido</h2></section>';
@@ -5639,6 +5713,7 @@
       }
       if ((el = e.target.closest('[data-cat]'))) { state.cat = el.dataset.cat; state.filtro = 'todas'; state.n = 60; render(); return; }
       if ((el = e.target.closest('[data-f]'))) { state.filtro = el.dataset.f; state.n = 60; render(); return; }
+      if ((el = e.target.closest('[data-msec]'))) { var mp = el.dataset.msec.split('|'); state.msec = state.msec || {}; state.msec[mp[0]] = mp[1] || null; render(); window.scrollTo(0, 0); return; }
       if ((el = e.target.closest('[data-pev]'))) { state.pev = +el.dataset.pev; setP('pev', state.pev); render(); return; }
       if ((el = e.target.closest('[data-clper]'))) { state.clPer = el.dataset.clper; render(); return; }
       if ((el = e.target.closest('[data-clg]'))) { state.clG = +el.dataset.clg; render(); return; }
@@ -5652,7 +5727,7 @@
       if ((el = e.target.closest('[data-desp]'))) { state.desp = state.desp || {}; state.desp[el.dataset.desp] = !state.desp[el.dataset.desp]; render(); return; }
       if ((el = e.target.closest('[data-im]'))) { state.infModo = el.dataset.im; render(); return; }
       if ((el = e.target.closest('[data-ev]'))) { state.evMed = el.dataset.ev; render(); return; }
-      if ((el = e.target.closest('[data-iv]'))) { state.idxVer = el.dataset.iv; state.idxN = 40; render(); return; }
+      if ((el = e.target.closest('[data-iv]'))) { state.idxVer = el.dataset.iv; state.idxN = 40; state.idxToro = null; render(); return; }
       if ((el = e.target.closest('[data-v]'))) { state.ventana = +el.dataset.v; render(); return; }
       if ((el = e.target.closest('[data-go]'))) { state.filtro = el.dataset.go; state.q = ''; state.n = 60; setTab('buscar'); return; }
       if ((el = e.target.closest('[data-k]'))) { state.abiertas[el.dataset.k] = !state.abiertas[el.dataset.k]; render(); return; }
@@ -5667,6 +5742,8 @@
       else if (a === 'back') back();
       else if (a === 'mas') { state.n += 60; updateResults(); }
       else if (a === 'idxmas') { state.idxN = (state.idxN || 40) + 60; render(); }
+      else if (a === 'ixtoro') { state.idxToro = b.dataset.tor; render(); }
+      else if (a === 'ixtoros') { state.idxToro = null; render(); }
       else if (a === 'ajustes') openSheet('Ajustes');
       else if (a === 'cerrar') closeSheet();
       else if (a === 'guardar') guardarSheet();
@@ -5729,7 +5806,7 @@
         else if (confirm('¿Desmarcar esta vacuna?')) delete SO.v[sk]; else return;
         sanOkGuardar(SO); render();
       }
-      else if (a === 'sanir') { state.desp = state.desp || {}; state.desp.sancal = true; setTab('tareas'); setTimeout(function () { var g = $('#sangrp'); if (g) g.scrollIntoView(); }, 50); }
+      else if (a === 'sanir') { state.desp = state.desp || {}; state.desp.sancal = true; state.msec = state.msec || {}; state.msec.tareas = 'Sanidad'; setTab('tareas'); setTimeout(function () { var g = $('#sangrp'); if (g) g.scrollIntoView(); }, 50); }
       else if (a === 'informe') abrirInforme();
       else if (a === 'poblacion') abrirPoblacion();
       else if (a === 'pobvista') { state.pobVista = b.dataset.pv; render(); window.scrollTo(0, 0); }
