@@ -1562,7 +1562,7 @@
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
-      var grp = function (t, html) { return '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>'; };
+      var GT = [], grp = function (t, html) { if (html) GT.push([t, html]); return ''; };
       var lrow = function (a, t, d) { return '<button class="lrow" data-a="' + a + '"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="pttl"><h2>' + t + '</h2><small class="pdesc">' + d + '</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'; };
       return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + grp('Para hacer',
         (function () {
@@ -1588,7 +1588,7 @@
         grp('Gestión', secTareas('venta', 'Para venta', '<p class="secnote">Criterio: ' + esc(vtaTxt()) + '. <button class="lnk" data-a="vtacfg">Cambiar criterio</button></p>', DB.animales.filter(paraVenta).sort(function (x, y) { return x.pr[0] - y.pr[0]; }), function (a) {
           return rowHTML(a, { right: '<span class="vta">VENTA</span>', sub: nf(a.pr[0], 1) + ' lts · ' + nf(delDe(a)) + ' días en leche' + (a.rech ? ' · ' + esc(a.rechDet || a.rech) : '') });
         }, 'Ninguna vaca cumple el criterio de venta.') + insHTML()) +
-        (esOperario() ? '' : sanTareasHTML());
+        (function () { var sh = esOperario() ? '' : sanTareasHTML(); if (sh) GT.push(['Sanidad', sh, true]); return mosaicoHTML('tareas', GT); })();
     }
 
     /* ----- pestaña Rodeo ----- */
@@ -3012,6 +3012,34 @@
         L.map(function (l) { return '<div class="lln"><i class="ldot ' + l.c + '"></i><p><b>' + esc(l.t) + ':</b> ' + esc(l.x) + '</p></div>'; }).join('') +
         '<details class="nota"><summary>Cómo se calcula</summary><p class="cap">Estaciones: verano dic–feb, otoño mar–may, invierno jun–ago, primavera sep–nov. Partos: preñeces confirmadas por tacto, contra los partos reales de la misma estación del año anterior (si la estación todavía no está toda confirmada, se dice cuántos hay hasta ahora). Ordeñe: el mismo cálculo de "Rodeo por mes", promedio de la estación, contra el promedio real de la misma estación del año anterior. Tendencia: cada una de las últimas estaciones contra la misma del año anterior. Reposición: vacas con al menos un parto vendidas o muertas en los últimos 2 años, llevado a un año, contra las vaquillonas preñadas que figuran hoy en el programa. Verde: mejor que el año anterior o alcanza; rojo: peor o falta; amarillo: para mirar; gris: parecido.</p></details></section>';
     }
+    // mosaico de Rodeo, Tareas y Leche (nov 2026): cuadros grandes con un ícono de línea acorde al título;
+    // cada cuadro abre su propia pantalla con Volver
+    var MS_IC = {
+      'Lo que pasó': ['gr', '<rect x="4" y="6" width="20" height="18" rx="2.5"/><path d="M4 11h20M9 3.5v4M19 3.5v4M10 17l2.5 2.5L18 14"/>'],
+      'Reproducción': ['', '<g transform="translate(-1 2)"><path d="M5.2 7.5C3.2 6 1.2 6.4.6 8c1.2 1.6 3 2.2 4.8 1.8M14.8 7.5c2-1.5 4-1.1 4.6.5-1.2 1.6-3 2.2-4.8 1.8"/><path d="M5 7.8c0-2.4 2.2-4 5-4s5 1.6 5 4c0 2.6-1 5.2-1.6 8.2-.4 2-1.3 3.3-3.4 3.3s-3-1.3-3.4-3.3C6 13 5 10.4 5 7.8z"/><ellipse cx="10" cy="18.6" rx="3.6" ry="2.4"/></g><g transform="translate(20 2)"><path d="M5.2 7.5C3.2 6 1.2 6.4.6 8c1.2 1.6 3 2.2 4.8 1.8M14.8 7.5c2-1.5 4-1.1 4.6.5-1.2 1.6-3 2.2-4.8 1.8"/><path d="M5 7.8c0-2.4 2.2-4 5-4s5 1.6 5 4c0 2.6-1 5.2-1.6 8.2-.4 2-1.3 3.3-3.4 3.3s-3-1.3-3.4-3.3C6 13 5 10.4 5 7.8z"/><ellipse cx="10" cy="18.6" rx="3.6" ry="2.4"/></g>', '-1 1 41 23', 52],
+      'Lo que viene': ['', '<rect x="4" y="6" width="20" height="18" rx="2.5"/><path d="M4 11h20M9 3.5v4M19 3.5v4M8.5 15h2M8.5 19.5h2M13 15h2"/><circle cx="18" cy="18" r="2.6"/>'],
+      'El rodeo': ['', '<path d="M4 24h20M7.5 24v-8M14 24V6M20.5 24v-11"/>'],
+      'Para hacer': ['', '<rect x="5" y="5" width="18" height="20" rx="2.5"/><path d="M10.5 3.5h7v3h-7zM9 12l1.6 1.6L13.5 11M9 18.5l1.6 1.6 2.9-2.6M16 12.5h3.5M16 19h3.5"/>'],
+      'Listas para llevar': ['', '<rect x="4" y="4" width="17" height="20" rx="2"/><path d="M4 9.5h17M4 14.5h17M10.5 9.5V24M22 16v8M19 21l3 3 3-3"/>'],
+      'Gestión': ['', '<rect x="3" y="8" width="22" height="13" rx="2"/><circle cx="14" cy="14.5" r="3"/><path d="M7 11.5v.01M21 17.5v.01"/>'],
+      'Sanidad': ['', '<path d="M19.5 3.5l5 5M22 6l-3 3M18 7.5l2.5 2.5-10 10-4-4zM8.5 19.5L4 24M12 13.5l1.5 1.5M14.5 11l1.5 1.5"/>'],
+      'Evolución': ['', '<path d="M4 4v20h20M7.5 19l5-5.5 4 3 6.5-8M19.5 8.5H23V12"/>'],
+      'Las vacas': ['', '<path d="M6 10h16l-2 14H8zM6 10c0-3 3.5-5 8-5s8 2 8 5M14 13.5s-2.5 3-2.5 4.6a2.5 2.5 0 0 0 5 0c0-1.6-2.5-4.6-2.5-4.6z"/>'] };
+    var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición',
+      'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
+      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron' };
+    // G: [título, html, crudo] (crudo = el html ya trae su propio título)
+    function mosaicoHTML(tab, G) {
+      G = G.filter(function (g) { return g[1]; }); state.msec = state.msec || {};
+      var sel = G.filter(function (g) { return g[0] === state.msec[tab]; })[0];
+      if (sel) return '<button class="rvolver" data-msec="' + tab + '|"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>' +
+        (sel[2] ? sel[1] : '<p class="grp">' + sel[0] + '</p><div class="glist">' + sel[1] + '</div>');
+      state.msec[tab] = null;
+      return '<div class="mosaico">' + G.map(function (g) {
+        var ic = MS_IC[g[0]] || ['', ''];
+        return '<button class="mtile" data-msec="' + tab + '|' + g[0] + '"><svg class="' + ic[0] + '" viewBox="' + (ic[2] || '0 0 28 28') + '" width="' + (ic[3] || 30) + '" height="' + (ic[3] ? 32 : 30) + '" aria-hidden="true">' + ic[1] + '</svg><span><b>' + g[0] + '</b><small>' + (MS_DESC[g[0]] || '') + '</small></span></button>';
+      }).join('') + '</div>';
+    }
     function rodeoTodasHTML() {
       var h = today(), V = DB.animales.filter(function (a) { return a.cat === 'vaca' || a.cat === 'seca' || !a.cat; }), Q = DB.animales.filter(function (a) { return a.cat === 'vaquillona'; });
       var rv = A.resumen(V, h), rq = A.resumen(Q, h);
@@ -3027,25 +3055,12 @@
         (despues ? '<p class="cap">Además, ' + despues + ' después de ese período.</p>' : '') + '</section>';
       // orden: lo que pasó (partos, ordeñe y secas), lo que viene (partos, rodeo), y después índice, reproducción y línea de vida
       // agrupadas por tema; un grupo sin tarjetas no muestra su título
-      // mosaico (nov 2026): cuatro cuadros; cada uno abre su propia pantalla con Volver. Un tema sin tarjetas no aparece
-      var IC = {
-        'Lo que pasó': '<path d="M12 7v5l3 2M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4 4v4h4"/>',
-        'Reproducción': '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
-        'Lo que viene': '<path d="M5 6h14v14H5zM5 10h14M9 3v4M15 3v4"/>',
-        'El rodeo': '<path d="M5 20V11M12 20V5M19 20v-7"/>' };
-      var DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición' };
+      // mosaico: cuatro cuadros que abren su propia pantalla con Volver; un tema sin tarjetas no aparece
       var G = [['Lo que pasó', partosOcHTML() + vovsHTML() + salTempHTML()],
         ['Reproducción', repHTML() + celosPerdidosHTML() + (prenOK() ? prenHTML() : '')],
         ['Lo que viene', lecturaHTML() + probables + proyHTML()],
-        ['El rodeo', vacasAnioHTML() + idxCardHTML() + (prenOK() ? ccRodeoHTML() : '') + vidaHTML()]].filter(function (g) { return g[1]; });
-      var sel = G.filter(function (g) { return g[0] === state.rodSec; })[0];
-      if (sel) return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() +
-        '<button class="rvolver" data-rsec=""><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>' +
-        '<p class="grp">' + sel[0] + '</p><div class="glist">' + sel[1] + '</div>';
-      state.rodSec = null;
-      return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() + '<div class="mosaico">' + G.map(function (g) {
-        return '<button class="mtile" data-rsec="' + g[0] + '"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[g[0]] + '</svg><span><b>' + g[0] + '</b><small>' + DESC[g[0]] + '</small></span></button>';
-      }).join('') + '</div>';
+        ['El rodeo', vacasAnioHTML() + idxCardHTML() + (prenOK() ? ccRodeoHTML() : '') + vidaHTML()]];
+      return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() + mosaicoHTML('rodeo', G);
     }
     function rodeoHTML() {
       if (state.cat === 'pren') state.cat = 'todas';
@@ -3935,7 +3950,7 @@
             sub: (i + 1) + 'º · ' + (pv != null ? 'antes ' + nf(pv, 1) + ' L (' + (d >= 0 ? '+' : '−') + nf(Math.abs(d), 1) + ')' : 'sin control anterior') + ' · ' + v.del + ' días en leche · ' + (v.n === 1 ? '1ª lactancia' : v.n + 'ª lactancia') });
         }).join('') + '</section>';
       var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
-      return '<h1 class="ptitle">Leche</h1>' + res + grp('Evolución', evolHTML() + curvasHTML()) + grp('Las vacas', porLote + top5 + caida + tabla);
+      return '<h1 class="ptitle">Leche</h1>' + res + mosaicoHTML('leche', [['Evolución', evolHTML() + curvasHTML()], ['Las vacas', porLote + top5 + caida + tabla]]);
     }
 
     /* ----- activación por tambo: links firmados por el Dr. Mauro Torterolo ----- */
@@ -5697,7 +5712,7 @@
       }
       if ((el = e.target.closest('[data-cat]'))) { state.cat = el.dataset.cat; state.filtro = 'todas'; state.n = 60; render(); return; }
       if ((el = e.target.closest('[data-f]'))) { state.filtro = el.dataset.f; state.n = 60; render(); return; }
-      if ((el = e.target.closest('[data-rsec]'))) { state.rodSec = el.dataset.rsec || null; render(); window.scrollTo(0, 0); return; }
+      if ((el = e.target.closest('[data-msec]'))) { var mp = el.dataset.msec.split('|'); state.msec = state.msec || {}; state.msec[mp[0]] = mp[1] || null; render(); window.scrollTo(0, 0); return; }
       if ((el = e.target.closest('[data-pev]'))) { state.pev = +el.dataset.pev; setP('pev', state.pev); render(); return; }
       if ((el = e.target.closest('[data-clper]'))) { state.clPer = el.dataset.clper; render(); return; }
       if ((el = e.target.closest('[data-clg]'))) { state.clG = +el.dataset.clg; render(); return; }
@@ -5790,7 +5805,7 @@
         else if (confirm('¿Desmarcar esta vacuna?')) delete SO.v[sk]; else return;
         sanOkGuardar(SO); render();
       }
-      else if (a === 'sanir') { state.desp = state.desp || {}; state.desp.sancal = true; setTab('tareas'); setTimeout(function () { var g = $('#sangrp'); if (g) g.scrollIntoView(); }, 50); }
+      else if (a === 'sanir') { state.desp = state.desp || {}; state.desp.sancal = true; state.msec = state.msec || {}; state.msec.tareas = 'Sanidad'; setTab('tareas'); setTimeout(function () { var g = $('#sangrp'); if (g) g.scrollIntoView(); }, 50); }
       else if (a === 'informe') abrirInforme();
       else if (a === 'poblacion') abrirPoblacion();
       else if (a === 'pobvista') { state.pobVista = b.dataset.pv; render(); window.scrollTo(0, 0); }
