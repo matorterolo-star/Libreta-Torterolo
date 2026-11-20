@@ -638,13 +638,26 @@
     var KEYT = 'libreta:tambos';
     var TAMBOS = { activo: null, lista: [] };
     var state = { tab: 'panel', q: '', filtro: 'todas', n: 60, rp: null, ventana: 183, abiertas: {}, error: '', persisted: true, draft: null, cat: 'vaca' };
-    // secciones plegables de Tareas y Rodeo (opción C): solo el título con la barra dorada; se abre una por vez
-    var CHEV_GRP = '<svg class="grpch" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    // secciones plegables de Tareas, Rodeo y Leche (opción A): cada sección es una fila dentro de una sola tarjeta,
+    // con una breve descripción; al tocarla se abre adentro de la misma tarjeta (una por vez)
+    var GRP_DESC = { 'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
+      'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Lo que viene': 'Lectura del tambo, partos y rodeo por mes', 'Reproducción': 'Ciclos de 21 días, celos y preñez', 'El rodeo': 'Vacas por año, índice y condición corporal',
+      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote y las que más bajaron' };
     function grpPl(tab, t, html, extra) {
       if (!html) return '';
-      var ab = !!state.grpAb && state.grpAb[tab] === t;
-      return '<button class="grp grpb" data-grp="' + tab + '" data-grpt="' + esc(t) + '" aria-expanded="' + ab + '"' + (t === 'Sanidad' ? ' id="sangrp"' : '') + '><span>' + t + '</span>' + CHEV_GRP + '</button>' +
-        (ab ? '<div class="glist">' + html + '</div>' + (extra || '') : '');
+      var ab = !!state.grpAb && state.grpAb[tab] === t, d = GRP_DESC[t];
+      return '<button class="gsec' + (ab ? ' open' : '') + '" data-grp="' + tab + '" data-grpt="' + esc(t) + '" aria-expanded="' + ab + '"' + (t === 'Sanidad' ? ' id="sangrp"' : '') + '><span class="pttl"><h2>' + t + '</h2>' + (d && !ab ? '<small class="pdesc">' + d + '</small>' : '') + '</span>' +
+        '<svg class="chev" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+        (ab ? '<div class="glist gsin">' + html + (extra || '') + '</div>' : '');
+    }
+    // junta las secciones seguidas en una sola tarjeta
+    function agruparSecs(main) {
+      var kids = Array.prototype.slice.call(main.children), caja = null, prev = null;
+      kids.forEach(function (c) {
+        if (!c.classList || !(c.classList.contains('gsec') || c.classList.contains('gsin'))) { caja = null; prev = null; return; }
+        if (!caja || c.previousElementSibling !== prev) { caja = document.createElement('div'); caja.className = 'glist gsecs'; c.parentNode.insertBefore(caja, c); }
+        caja.appendChild(c); prev = caja;
+      });
     }
     var $ = function (s) { return document.querySelector(s); };
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -3929,7 +3942,7 @@
           return rowHTML(v.a, { right: '<span class="when ' + (d != null && d < 0 ? 'late' : 'ok') + '">' + nf(v.lt, 1) + ' L</span>',
             sub: (i + 1) + 'º · ' + (pv != null ? 'antes ' + nf(pv, 1) + ' L (' + (d >= 0 ? '+' : '−') + nf(Math.abs(d), 1) + ')' : 'sin control anterior') + ' · ' + v.del + ' días en leche · ' + (v.n === 1 ? '1ª lactancia' : v.n + 'ª lactancia') });
         }).join('') + '</section>';
-      var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
+      var grp = function (t, html) { return grpPl('leche', t, html); };
       return '<h1 class="ptitle">Leche</h1>' + res + grp('Evolución', evolHTML() + curvasHTML()) + grp('Las vacas', porLote + top5 + caida + tabla);
     }
 
@@ -5661,6 +5674,7 @@
       else if (state.tab === 'leche') { main.innerHTML = err + lecheHTML(); plegarFicha(main); vetCompartir(main); }
       else if (state.tab === 'panel' && panelOK()) { main.innerHTML = err + panelHTML(); vetCompartir(main); }
       else { main.innerHTML = err + buscarHTML(); updateResults(); }
+      if (state.tab === 'tareas' || state.tab === 'rodeo' || state.tab === 'leche') agruparSecs(main);
       plegarNotas(main);
     }
 
