@@ -1962,6 +1962,50 @@
     }
     // Celos perdidos: días entre un celo o servicio y el siguiente de cada animal en la temporada (mismo inicio que los ciclos de 21 días).
     // 17 a 24 días: ciclo normal; 25 a 60 días: celo no detectado; más de 60, aparte.
+    /* ----- Tactos de la zafra: cada visita de tacto con su % de preñez; al tocar una, el detalle (nov 2026) ----- */
+    function tactosZafraHTML() {
+      if (!DB.hist || esOperario()) return '';
+      var ini = inicio21(), ref = DB.fecha || today(); if (ini > ref) return '';
+      // vacía = diagnóstico de tacto vacía (no cuenta ciclando, apta, anestro ni sucia, que no son diagnósticos de preñez)
+      var vac = function (c) { return esVacia(c) && /^vac/i.test(codeName(c)); };
+      var dias = {};
+      infLista().forEach(function (x) {
+        (x.h.ta || []).forEach(function (t) {
+          if (t[0] < ini || t[0] > ref || !enSel(unidadEn(x, t[0]))) return;
+          var vq = !(x.h.pa || []).some(function (p) { return p[0] < t[0]; });
+          (dias[t[0]] = dias[t[0]] || []).push({ c: t[1], dr: t[2] || null, vq: vq });
+        });
+      });
+      // una visita puede llevar dos días seguidos: se juntan; las fechas con menos de 5 tactos no son una recorrida
+      var V = [];
+      Object.keys(dias).sort().forEach(function (d) {
+        var u = V[V.length - 1];
+        if (u && A.diffDays(d, u.hasta) <= 1) { u.L = u.L.concat(dias[d]); u.hasta = d; } else V.push({ f: d, hasta: d, L: dias[d] });
+      });
+      V = V.filter(function (v) { return v.L.length >= 5; });
+      if (!V.length) return '';
+      var tp = 0, tv = 0;
+      V.forEach(function (v) {
+        v.p = v.L.filter(function (o) { return esPren(o.c); }).length; v.v = v.L.filter(function (o) { return vac(o.c); }).length;
+        v.pct = v.p + v.v >= 5 ? v.p / (v.p + v.v) * 100 : null; tp += v.p; tv += v.v;
+      });
+      var media = tp + tv ? tp / (tp + tv) * 100 : null, sel = state.tzSel;
+      var filas = V.map(function (v) {
+        var bajo = v.pct != null && media != null && v.pct < media - 5, abierto = sel === v.f;
+        var row = '<button class="tzr" data-a="tzsel" data-f="' + v.f + '" aria-expanded="' + abierto + '"><span class="tzf">' + A.fmt(v.f).slice(0, 5) + '</span><span class="tzn">' + nf(v.L.length) + '</span>' +
+          '<span class="tzb">' + (v.pct != null ? '<i style="width:' + Math.round(v.pct) + '%"' + (bajo ? ' class="bajo"' : '') + '></i>' : '') + '</span><b class="tzp">' + (v.pct != null ? nf(v.pct) + '%' : '–') + '</b></button>';
+        if (!abierto) return row;
+        var R = {}, tr = {}, nTr = 0, nVq = 0;
+        v.L.forEach(function (o) { var n = esPren(o.c) ? 'Preñadas' : vac(o.c) ? 'Vacías' : codeName(o.c); R[n] = (R[n] || 0) + 1; if (o.dr) { nTr++; tr[o.dr] = (tr[o.dr] || 0) + 1; } if (o.vq) nVq++; });
+        var orden = Object.keys(R).sort(function (a, b) { return (b === 'Preñadas') - (a === 'Preñadas') || (b === 'Vacías') - (a === 'Vacías') || R[b] - R[a]; });
+        var det = orden.map(function (n) { var al = n !== 'Preñadas' && n !== 'Vacías' && tacAlerta(n); return '<span' + (al ? ' class="alr"' : '') + '>' + esc(n) + ' <b>' + nf(R[n]) + '</b></span>'; }).join('');
+        var trt = nTr ? '<p class="tzt">Tratadas <b>' + nf(nTr) + '</b>: ' + Object.keys(tr).sort(function (a, b) { return tr[b] - tr[a]; }).map(function (k) { return esc(k) + ' ' + nf(tr[k]); }).join(' · ') + '</p>' : '<p class="tzt">Sin tratamientos anotados.</p>';
+        return row + '<div class="tzd"><p class="cap" style="margin:0 0 6px">' + (v.hasta !== v.f ? A.fmt(v.f) + ' y ' + A.fmt(v.hasta) : A.fmt(v.f)) + ' · ' + nf(v.L.length) + ' tactadas' + (nVq ? ' (' + nVq + (nVq === 1 ? ' vaquillona)' : ' vaquillonas)') : '') + '</p><div class="tzc">' + det + '</div>' + trt + '</div>';
+      }).join('');
+      return '<section class="card"><h2>Tactos de la zafra</h2>' +
+        '<div class="tzh"><span class="tzf">Fecha</span><span class="tzn">Tact.</span><span></span><span class="tzp">Preñez</span></div>' + filas +
+        '<p class="cap" style="margin-top:8px">Preñez del tacto: preñadas sobre las diagnosticadas preñadas o vacías ese día' + (media != null ? ' (promedio de la zafra ' + nf(media) + '%; en ámbar, más de 5 puntos por debajo)' : '') + '. Tocá un tacto para ver el detalle.</p></section>';
+    }
     function celosPerdidosHTML() {
       if (!DB.hist) return '';
       var ini = inicio21(), ref = DB.fecha || today(); if (ini > ref) return '';
@@ -3025,7 +3069,7 @@
       'Sanidad': ['', '<path d="M19.5 3.5l5 5M22 6l-3 3M18 7.5l2.5 2.5-10 10-4-4zM8.5 19.5L4 24M12 13.5l1.5 1.5M14.5 11l1.5 1.5"/>'],
       'Evolución': ['', '<path d="M4 4v20h20M7.5 19l5-5.5 4 3 6.5-8M19.5 8.5H23V12"/>'],
       'Las vacas': ['', '<path d="M6 10h16l-2 14H8zM6 10c0-3 3.5-5 8-5s8 2 8 5M14 13.5s-2.5 3-2.5 4.6a2.5 2.5 0 0 0 5 0c0-1.6-2.5-4.6-2.5-4.6z"/>'] };
-    var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición',
+    var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días, tactos y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición',
       'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
       'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron' };
     // G: [título, html, crudo] (crudo = el html ya trae su propio título)
@@ -3057,7 +3101,7 @@
       // agrupadas por tema; un grupo sin tarjetas no muestra su título
       // mosaico: cuatro cuadros que abren su propia pantalla con Volver; un tema sin tarjetas no aparece
       var G = [['Lo que pasó', partosOcHTML() + vovsHTML() + salTempHTML()],
-        ['Reproducción', repHTML() + celosPerdidosHTML() + (prenOK() ? prenHTML() : '')],
+        ['Reproducción', repHTML() + tactosZafraHTML() + celosPerdidosHTML() + (prenOK() ? prenHTML() : '')],
         ['Lo que viene', lecturaHTML() + probables + proyHTML()],
         ['El rodeo', vacasAnioHTML() + idxCardHTML() + (prenOK() ? ccRodeoHTML() : '') + vidaHTML()]];
       return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() + mosaicoHTML('rodeo', G);
@@ -3720,7 +3764,7 @@
     // en la ficha de la vaca las tarjetas tienen su propia descripción
     var DESC_FICHA = {
       'Control lechero': 'Litros de los últimos controles', 'Lactancias': 'Litros y sólidos de cada lactancia',
-      'Historial reproductivo': 'Partos, servicios y tactos', 'Índice del tambo': 'Su lugar entre las vacas del tambo',
+      'Historial reproductivo': 'Partos, servicios y tactos', 'Tactos de la zafra': 'Preñez de cada tacto de la temporada', 'Índice del tambo': 'Su lugar entre las vacas del tambo',
       'Identificación': 'Caravana, nacimiento y origen', 'Condición corporal': 'Cómo fue cambiando, con los partos marcados'
     };
     function descDe(k, ficha) {
@@ -5813,6 +5857,7 @@
       else if (a === 'idxmas') { state.idxN = (state.idxN || 40) + 60; render(); }
       else if (a === 'ixtoro') { state.idxToro = b.dataset.tor; render(); }
       else if (a === 'ixtoros') { state.idxToro = null; render(); }
+      else if (a === 'tzsel') { state.tzSel = state.tzSel === b.dataset.f ? null : b.dataset.f; render(); }
       else if (a === 'ajustes') openSheet('Ajustes');
       else if (a === 'cerrar') closeSheet();
       else if (a === 'guardar') guardarSheet();
