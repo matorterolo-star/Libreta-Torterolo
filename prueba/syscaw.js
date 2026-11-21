@@ -7,7 +7,7 @@
     ctrl: 'CargaCtrlLech.DB', lact: 'TotProdParto.DB', toros: 'Toros General.DB', codigos: 'Codigos Reproductivos.DB',
     bajas: 'Detalle Baja.DB', rodeos: 'NomenclRodeos.DB', elect: 'IdsEnUso.DB'
   };
-  var OPCIONALES = { tambos: 'Tambos.DB', llaves: 'Llaves.DB', agenda: 'Agenda.DB', maestro: 'MaestroCoLech.DB', estcorp: 'ESTCORP.DB', pases: 'SegTambos.DB' };
+  var OPCIONALES = { drogas: 'Drogas.DB', tambos: 'Tambos.DB', llaves: 'Llaves.DB', agenda: 'Agenda.DB', maestro: 'MaestroCoLech.DB', estcorp: 'ESTCORP.DB', pases: 'SegTambos.DB' };
   var FIELDS = {
     ident: ['ID', 'RP', 'NombreOrigen', 'FNac', 'IDMadre', 'IDPadre', 'IdTipoRodeo', 'UltimoRodeo', 'DescarteCausa', 'FechaBaja', 'ProdVitLitros', 'Tambo', 'BajaCausa', 'BajaDetalle', 'DescarteFecha'],
     serv: ['Vaca', 'Fecha', 'Evento', 'Toro'],
@@ -222,7 +222,13 @@
       if (f >= desdeHist) (ecH[r[0]] = ecH[r[0]] || []).push([f, Math.round(r[2] * 100) / 100]);
     }); } catch (e) { ecBy = {}; ecH = {}; }
     Object.keys(ecH).forEach(function (k) { ecH[k].sort(function (a, b) { return a[0] < b[0] ? -1 : 1; }); });
-    T.tactos.forEach(function (r) { var g = G[r[0]], f = okDate(r[1]); if (g && f) { g.ta.push([f, r[2]]); if (f > maxF) maxF = f; } });
+    // tratamiento aplicado en el tacto (campo Droga, con el nombre de la tabla de drogas de SysCaw): va como tercer dato del tacto
+    var drNom = {}, trTac = {};
+    try {
+      if (files[OPCIONALES.drogas]) PX.readTable(files[OPCIONALES.drogas], { fields: ['Id', 'Nombre', 'Abrev'], array: true }).rows.forEach(function (r) { var n = (r[1] || r[2] || '').trim(); if (n) drNom[r[0]] = n; });
+      PX.readTable(files[TABLES.tactos], { fields: ['Vaca', 'Fecha', 'Droga'], array: true }).rows.forEach(function (r) { if (r[2] != null && drNom[r[2]]) trTac[r[0] + '|' + r[1]] = drNom[r[2]]; });
+    } catch (e) { trTac = {}; }
+    T.tactos.forEach(function (r) { var g = G[r[0]], f = okDate(r[1]); if (g && f) { var dr = trTac[r[0] + '|' + r[1]]; g.ta.push(dr ? [f, r[2], dr] : [f, r[2]]); if (f > maxF) maxF = f; } });
     T.lact.forEach(function (r) {
       var g = G[r[0]]; if (!g || !(r[1] > 0)) return;
       var L = r[3] || 0, L3 = r[4] || null;

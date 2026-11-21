@@ -952,9 +952,9 @@
       if (!V || V.fuente !== 'syscaw' || !V.hist) return out;
       var ids = N.idProd || [], vids = V.idProd || [];
       if (ids.length && vids.length && !ids.some(function (x) { return vids.indexOf(x) >= 0; })) return out; // otro productor: no se mezcla
-      var unir = function (a, b) {
+      var unir = function (a, b, n) {
         var vis = {}, r = [];
-        (a || []).concat(b || []).forEach(function (x) { var k = JSON.stringify(x); if (!vis[k]) { vis[k] = 1; r.push(x); } });
+        (a || []).concat(b || []).forEach(function (x) { var k = JSON.stringify(n && x && x.slice ? x.slice(0, n) : x); if (!vis[k]) { vis[k] = 1; r.push(x); } });
         return r.sort(function (x, y) { return String(x[0]) < String(y[0]) ? -1 : String(x[0]) > String(y[0]) ? 1 : 0; });
       };
       var vivo = {}; (N.todos || []).forEach(function (x) { vivo[x.rp] = 1; });
@@ -964,7 +964,7 @@
         if (enN[b.key]) {
           // la baja está en los dos: se completa su historia (el respaldo nuevo recorta partos viejos)
           var hn = N.hist[b.key]; if (!hn) { N.hist[b.key] = hv; return; }
-          ['pa', 'ev', 'ta', 'la', 'ct', 'ab', 'ec', 'mv'].forEach(function (k) { if (hv[k] || hn[k]) hn[k] = unir(hn[k], hv[k]); });
+          ['pa', 'ev', 'ta', 'la', 'ct', 'ab', 'ec', 'mv'].forEach(function (k) { if (hv[k] || hn[k]) hn[k] = unir(hn[k], hv[k], k === 'ta' ? 2 : 0); });
           return;
         }
         if (vivo[b.key]) return;
@@ -3228,6 +3228,8 @@
         (V.tier === 'top' ? '<b>Top 10%</b>' : V.tier === 'peor' ? '<b>10% inferior</b>' : '<b class="lbl">Índice</b>') + '</span>';
     }
     function codeName(c) { var k = DB.codes && DB.codes[String(c)]; return k ? k[1] : 'Código ' + c; }
+    // diagnósticos del tacto que piden atención (sucia, anestro, quiste, metritis…): van resaltados en el historial
+    function tacAlerta(n) { return /suci|anestr|quist|metrit|endometr|piometr|retenc/i.test(n || ''); }
     function tacClass(c) { return c === 1 ? 'prenada' : (c === 7 || c === 105 || c === 72) ? 'vacia' : ''; }
     function criaTxt(r) {
       var m = { M: 'Macho', H: 'Hembra', A: 'Aborto', '?': 'Sin dato' };
@@ -3241,7 +3243,7 @@
         var from = bounds[i], to = bounds[i + 1], parto = i > 0 ? pa[i - 1] : null, next = pa[i] || null;
         var items = [];
         h.ev.forEach(function (e) { if (e[0] >= from && e[0] < to && !(parto && e[0] === from && e[1] === 'C')) items.push({ f: e[0], t: e[1], toro: e[2], ins: e[3] }); });
-        h.ta.forEach(function (t) { if (t[0] >= from && t[0] < to) items.push({ f: t[0], t: 'T', c: t[1] }); });
+        h.ta.forEach(function (t) { if (t[0] >= from && t[0] < to) items.push({ f: t[0], t: 'T', c: t[1], dr: t[2] || null }); });
         items.sort(function (a, b) { return a.f < b.f ? -1 : a.f > b.f ? 1 : (b.t === 'T') - (a.t === 'T'); });
         var conc = next ? next[4] : null, nServ = 0, nServTot = 0;
         items.forEach(function (it) { if (it.t === 'S') { nServTot++; if (!conc || it.f <= conc) nServ++; if (conc && it.f === conc) it.ok = true; } });
@@ -3302,7 +3304,7 @@
         }
         s.items.forEach(function (it) {
           var dpp = s.parto ? A.diffDays(it.f, s.parto[0]) : null, cls, txt;
-          if (it.t === 'T') { cls = 'tac ' + tacClass(it.c); txt = 'Tacto: <b>' + esc(codeName(it.c)) + '</b>'; }
+          if (it.t === 'T') { var tc = tacClass(it.c), nm = codeName(it.c), alr = !tc && tacAlerta(nm); cls = 'tac ' + (tc || (alr ? 'alerta' : '')); txt = 'Tacto: <b' + (alr ? ' class="alr"' : '') + '>' + esc(nm) + '</b>' + (it.dr ? '<span class="trat">' + esc(it.dr) + '</span>' : ''); }
           else if (it.t === 'S') { cls = 'serv' + (it.ok ? ' ok' : ''); txt = '<b>Servicio</b>' + (it.toro ? ' · ' + esc(it.toro) : '') + (it.ins ? ' <small class="insem">' + esc(it.ins) + '</small>' : '') + (it.ok ? '<span class="x">preñó</span>' : ''); }
           else { cls = 'celo'; txt = 'Celo'; }
           li.push('<li class="' + cls + '"><span class="f">' + A.fmt(it.f) + '</span><span>' + txt + '</span><span class="d">' + (dpp != null ? dpp + ' dpp' : '') + '</span></li>');
