@@ -3881,7 +3881,7 @@
       'Lectura del tambo': 'Lo que dicen los números, en palabras', 'Partos por mes': 'Los partos que se vienen', 'Rodeo por mes': 'Ordeñe, secas y preparto que se vienen',
       'Ciclos de 21 días': 'Servicio y concepción de cada ciclo', 'Comparar zafras': 'Los indicadores de cada zafra, lado a lado',
       'Índice del tambo': 'Las mejores y las peores vacas', 'Condición corporal': 'Al secado, al parto, a los 30 días y en la lactancia',
-      'Últimos 12 meses': 'Litros y sólidos por vaca, mes a mes', 'Por lote': 'Litros y días en leche de cada lote', 'Curva de lactancia': 'Primíparas y multíparas según días en leche',
+      'Últimos 12 meses': 'Litros y sólidos por vaca, mes a mes', 'Por lote': 'Litros y días en leche de cada lote', 'Mastitis': 'Casos, repetidos y cuándo aparecen', 'Curva de lactancia': 'Primíparas y multíparas según días en leche',
       'Top 5 del control': 'Las que más litros dieron', 'Cayeron más': 'Las que bajaron 20% o más', 'Por lactancia y por tercio': 'Litros según lactancia y días en leche',
       'tactarvq': 'Servidas sin tacto posterior', 'secar': 'Preñadas cerca del parto', 'partos': 'Partos probables de las próximas semanas', 'atrasados': 'Preñadas con el parto vencido hace más de 30 días',
       'venta': 'Las que cumplen tu criterio de venta', 'insem': 'Liquidación por número de servicio'
@@ -4278,7 +4278,7 @@
             sub: (i + 1) + 'º · ' + (pv != null ? 'antes ' + nf(pv, 1) + ' L (' + (d >= 0 ? '+' : '−') + nf(Math.abs(d), 1) + ')' : 'sin control anterior') + ' · ' + v.del + ' días en leche · ' + (v.n === 1 ? '1ª lactancia' : v.n + 'ª lactancia') });
         }).join('') + '</section>';
       var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
-      return '<h1 class="ptitle">Leche</h1>' + mosaicoHTML('leche', [['Control', res + ctlGrafHTML(V)], ['Evolución', evolHTML() + curvasHTML()], ['Las vacas', porLote + top5 + caida + tabla], ['Mastitis', mastitisHTML(), true]]);
+      return '<h1 class="ptitle">Leche</h1>' + mosaicoHTML('leche', [['Control', res + ctlGrafHTML(V)], ['Evolución', evolHTML() + curvasHTML()], ['Las vacas', porLote + top5 + caida + tabla], ['Mastitis', mastitisHTML()]]);
     }
 
     /* ----- activación por tambo: links firmados por el Dr. Mauro Torterolo ----- */
