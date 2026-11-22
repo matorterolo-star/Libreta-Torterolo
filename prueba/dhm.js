@@ -135,7 +135,9 @@
     var G = {}, maxF = '0000';
     var g = function (id) { return G[id] || (G[id] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sa: [] }); };
     var ver = function (f) { if (f && f > maxF) maxF = f; };
-    servs.forEach(function (s) { if (!mio[s.Ani_IdAnimal]) return; var f = fch(s.Ser_Fecha); if (!f || !unico('S', s.Ani_IdAnimal, f)) return; ver(f); g(s.Ani_IdAnimal).ev.push([f, 'S', toroDe(s), null, s.Ser_IdServicio, s.Est_IdEstablecimiento]); });
+    // inseminador: el id del servicio apunta a la tabla de personas de DHM (DHM_Propietarios); nombre con mayúscula inicial
+    var insN = {}; T('DHM_Propietarios', ['Pro_IdPropietario', 'Pro_Nombre']).forEach(function (p) { var n = tx(p.Pro_Nombre); if (n) insN[p.Pro_IdPropietario] = n.toLowerCase().replace(/(^|[\s.\-])([a-záéíóúñü])/g, function (m, a, b) { return a + b.toUpperCase(); }); });
+    servs.forEach(function (s) { if (!mio[s.Ani_IdAnimal]) return; var f = fch(s.Ser_Fecha); if (!f || !unico('S', s.Ani_IdAnimal, f)) return; ver(f); g(s.Ani_IdAnimal).ev.push([f, 'S', toroDe(s), s.Ser_IdInseminador != null ? insN[s.Ser_IdInseminador] || null : null, s.Ser_IdServicio, s.Est_IdEstablecimiento]); });
     T('DHM_Celos', ['Ani_IdAnimal', 'Cel_Fecha']).forEach(function (c) { if (!mio[c.Ani_IdAnimal]) return; var f = fch(c.Cel_Fecha); if (!f || !unico('C', c.Ani_IdAnimal, f)) return; ver(f); g(c.Ani_IdAnimal).ev.push([f, 'C', '', null]); });
 
     // partos y lactancias (una lactancia puede empezar con un aborto avanzado)
