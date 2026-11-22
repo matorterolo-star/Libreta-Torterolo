@@ -3499,39 +3499,44 @@
       var toro = a.toro && a.toro !== '???..' && !/^celo/i.test(a.toro) ? a.toro : null;
       return [A.fmt(a.sFecha).slice(0, 5), toro, ins, nroServ(a.sN)].filter(Boolean).map(esc).join(' · ');
     }
-    function festBar(dias, pp, seca, atr) {
+    function festBar(dias, pp, seca, atr, fS, fP) {
       // barra de la gestación: del servicio que la preñó al parto (283 días); marca de seca; si el parto ya pasó, tramo rojo hasta hoy
       var W = 280, tot = A.GEST || 283, ext = atr ? Math.max(25, Math.min(60, atr.d)) : 0, esc2 = W / (tot + ext);
       var xh = (atr ? tot + Math.min(atr.d, ext) : Math.min(dias, tot)) * esc2, xp = tot * esc2, xs = seca ? (tot - 60) * esc2 : null, s = '';
       s += '<rect x="0" y="9" width="' + W + '" height="10" rx="5" class="fbt"/>';
       if (atr) s += '<rect x="' + (xp - 5).toFixed(1) + '" y="9" width="' + (xh - xp + 5).toFixed(1) + '" height="10" rx="5" fill="var(--vacia)"/>';
       s += '<rect x="0" y="9" width="' + Math.min(xh, xp).toFixed(1) + '" height="10" rx="5" class="fbf"/>';
-      if (xs != null) s += '<line x1="' + xs.toFixed(1) + '" y1="4" x2="' + xs.toFixed(1) + '" y2="24" stroke="var(--apta)" stroke-width="2"/><text x="' + xs.toFixed(1) + '" y="33" text-anchor="middle" class="fbl" fill="var(--apta)">seca</text>';
+      if (xs != null) s += '<line x1="' + xs.toFixed(1) + '" y1="4" x2="' + xs.toFixed(1) + '" y2="24" stroke="var(--apta)" stroke-width="2"/><text x="' + xs.toFixed(1) + '" y="33" text-anchor="middle" class="fbl" fill="var(--apta)">seca</text>' + (fS && !atr ? '<text x="' + xs.toFixed(1) + '" y="47" text-anchor="middle" class="fbd">' + fS + '</text>' : '');
       if (atr) s += '<line x1="' + xp.toFixed(1) + '" y1="7" x2="' + xp.toFixed(1) + '" y2="23" stroke="var(--ink)" stroke-width="1.5"/><text x="' + xp.toFixed(1) + '" y="33" text-anchor="middle" class="fbl" fill="var(--prenada)">parto</text><text x="' + Math.min(xh, W - 10).toFixed(1) + '" y="5" text-anchor="middle" class="fbl" fill="var(--vacia)">hoy</text>';
       else {
         var cerca = xs != null && Math.abs(xh - xs) < 26;
         if (!(xh > W - 30)) s += '<text x="' + Math.max(10, xh).toFixed(1) + '" y="' + (cerca ? 6 : 33) + '" text-anchor="middle" class="fbl" fill="var(--ink)">hoy</text>';
-        s += '<text x="' + (W - 2) + '" y="33" text-anchor="end" class="fbl" fill="var(--prenada)">' + (xh > W - 30 ? 'a parir' : 'pare') + '</text>';
+        s += '<text x="' + (W - 2) + '" y="33" text-anchor="end" class="fbl" fill="var(--prenada)">' + (xh > W - 30 ? 'a parir' : 'parto') + '</text>' + (fP ? '<text x="' + (W - 2) + '" y="47" text-anchor="end" class="fbd">' + fP + '</text>' : '');
       }
-      return '<svg class="fbar" viewBox="0 0 ' + W + ' 36" role="img" aria-label="Avance de la gestación">' + s + '</svg>';
+      return '<svg class="fbar" viewBox="0 0 ' + W + ' ' + ((fS || fP) && !atr ? 50 : 36) + '" role="img" aria-label="Avance de la gestación">' + s + '</svg>';
     }
     function festHTML(a, d, h, t) {
       if (a.cat === 'ternera') return '';
       var col, tit, sub = '', extra = '', atr = atrasoFicha(a);
       var sv = servTxt(a, h);
       var tacto = a.tFecha ? 'tacto ' + A.fmt(a.tFecha).slice(0, 5) : '';
+      // casilleros (opción B, nov 2026): servicio con su número, toro y tacto, a todo el ancho y centrados
+      var casi = function (L) { L = L.filter(function (x) { return x[1]; }); return L.length ? '<div class="fgrid">' + L.map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join('') + '</div>' : ''; };
+      var toroF = a.toro && a.toro !== '???..' && !/^celo/i.test(a.toro) ? esc(a.toro) : '';
+      var servF = a.sFecha ? A.fmt(a.sFecha).slice(0, 5) + (a.sN ? ' · ' + a.sN + '.º' : '') : '', grid = '';
       if (a.estado === 'prenada') {
         var pp = d.partoProb, dias = pp ? (A.GEST || 283) - A.diffDays(pp, t) : null, seca = a.cat === 'seca';
         var lpH = h && h.pa && h.pa.length ? h.pa[h.pa.length - 1] : null, secada = seca && lpH && lpH[5] && (!a.pFecha || lpH[5] > a.pFecha) ? lpH[5] : null;
         if (atr) { col = 'vacia'; tit = 'Parto atrasado ' + atr.d + ' días'; sub = ['Debía parir el ' + A.fmt(pp).slice(0, 5), dias + ' días de preñez', sv].filter(Boolean).join(' · '); }
-        else { col = 'prenada'; tit = (dias != null ? dias + ' días de preñez' : 'Preñada') + (seca ? ' · seca' : ''); sub = [sv, tacto].filter(Boolean).join(' · '); }
+        else { col = 'prenada'; tit = (dias != null ? dias + ' días de preñez' : 'Preñada') + (seca ? ' · seca' : ''); sub = [sv, tacto].filter(Boolean).join(' · '); grid = casi([['Servicio', servF], ['Toro', toroF], ['Tacto', a.tFecha ? A.fmt(a.tFecha).slice(0, 5) : '']]); }
         if (pp && dias != null && dias >= 0) {
           var conSeca = a.cat === 'vaca' || a.cat === 'seca' || !a.cat;
-          extra = festBar(dias, pp, conSeca, atr);
-          if (!atr) extra += '<div class="fdates"><span>' + (secada ? 'Se secó <b>' + A.fmt(secada).slice(0, 5) + '</b>' : conSeca && d.secado ? 'Secar <b>' + A.fmt(d.secado) + '</b>' : '') + '</span><span>' + (d.partoEstimado ? 'Parto estimado' : 'Parto') + ' <b>' + A.fmt(pp) + '</b></span></div>';
+          var fSeca = secada || (conSeca && d.secado) || null;
+          extra = festBar(dias, pp, conSeca, atr, fSeca ? A.fmt(fSeca).slice(0, 5) : null, A.fmt(pp).slice(0, 5));
         }
       } else if (a.estado === 'servida') {
         col = 'servida'; tit = 'Servida hace ' + d.diasServ + (d.diasServ === 1 ? ' día' : ' días'); sub = sv;
+        grid = casi([['Servicio', servF], ['Toro', toroF], ['Último tacto', a.tFecha && a.tFecha < a.sFecha ? A.fmt(a.tFecha).slice(0, 5) + (a.result ? ' · ' + esc(a.result) : '') : '']]);
       } else {
         var desdeParto = a.pFecha ? A.diffDays(t, a.pFecha) : null;
         var servLac = a.sFecha && (!a.pFecha || a.sFecha > a.pFecha) && !/^celo/i.test(a.toro || '');
@@ -3551,9 +3556,9 @@
         var mot = a.rechDet || a.rech;
         sub = [tit, sub].filter(Boolean).join(' · ');
         col = 'vacia'; tit = 'Descarte' + (mot ? ' por ' + String(mot).toLowerCase() : '');
-        extra = '';
+        extra = ''; grid = '';
       }
-      return '<section class="fest" style="--c:var(--' + col + ')"><div class="ftit">' + tit + '</div>' + (sub ? '<div class="fsub">' + sub + '</div>' : '') + extra + '</section>';
+      return '<section class="fest" style="--c:var(--' + col + ')"><div class="ftit">' + tit + '</div>' + (grid || (sub ? '<div class="fsub">' + sub + '</div>' : '')) + extra + '</section>';
     }
     function fichaBajaHTML(a) {
       var h = hist(a.key);
