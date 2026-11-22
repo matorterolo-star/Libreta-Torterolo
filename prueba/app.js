@@ -2001,7 +2001,7 @@
       var media = tp + tv ? tp / (tp + tv) * 100 : null, sel = state.tzSel;
       var filas = V.map(function (v) {
         var bajo = v.pct != null && media != null && v.pct < media - 5, abierto = sel === v.f;
-        var row = '<button class="tzr" data-a="tzsel" data-f="' + v.f + '" aria-expanded="' + abierto + '"><span class="tzf">' + A.fmt(v.f).slice(0, 5) + '</span><span class="tzn">' + nf(v.L.length) + '</span>' +
+        var row = '<button class="tzr" data-a="tzsel" data-tzf="' + v.f + '" aria-expanded="' + abierto + '"><span class="tzf">' + A.fmt(v.f).slice(0, 5) + '</span><span class="tzn">' + nf(v.L.length) + '</span>' +
           '<span class="tzb">' + (v.pct != null ? '<i style="width:' + Math.round(v.pct) + '%"' + (bajo ? ' class="bajo"' : '') + '></i>' : '') + '</span><b class="tzp">' + (v.pct != null ? nf(v.pct) + '%' : '–') + '</b></button>';
         if (!abierto) return row;
         var R = {}, tr = {}, nTr = 0, nVq = 0;
@@ -3379,11 +3379,12 @@
       var rep = casos.filter(function (c) { return c.rep; }).length, multi = casos.filter(function (c) { return Object.keys(c.q).filter(cuarto).length > 1; }).length;
       var conD = casos.filter(function (c) { return c.dpp != null; }), p30 = conD.filter(function (c) { return c.dpp <= 30; }).length;
       var conN = casos.filter(function (c) { return c.nro; }), pri = conN.filter(function (c) { return c.nro === 1; }).length;
-      var cls = function (v, meta) { return v == null ? '' : v < meta ? ' ok' : ' mal'; };
+      // ámbar = cerca de la meta (desde 5/6 de la meta: 20 de 24, 17 % de 20 %): criterio propio, la meta es la de Michigan
+      var cls = function (v, meta) { return v == null ? '' : v < meta * 5 / 6 ? ' ok' : v < meta ? ' cerca' : ' mal'; };
       var tile = function (t, v, sub, c) { return '<div class="mk"><span>' + t + '</span><b class="' + (c || '') + '">' + v + '</b>' + (sub ? ' <small>' + sub + '</small>' : '') + '</div>'; };
       var pRep = rep / casos.length * 100, pMul = multi / casos.length * 100;
       var big = inc != null ? '<div class="mbig"><b class="' + cls(inc, MAST_META) + '">' + nf(inc) + '</b><span>casos cada 100 vacas en ordeñe por año</span></div>' +
-        '<div class="mmeter"><i style="width:' + (MAST_META / 50 * 100) + '%"></i><u style="left:' + Math.min(99, inc / 50 * 100) + '%"></u></div>' +
+        '<div class="mmeter"><i style="width:' + (MAST_META / 50 * 100) + '%"></i><em style="left:' + (MAST_META * 5 / 6 / 50 * 100) + '%;width:' + (MAST_META / 6 / 50 * 100) + '%"></em><u style="left:' + Math.min(99, inc / 50 * 100) + '%"></u></div>' +
         '<div class="mml"><span>0</span><span style="left:' + (MAST_META / 50 * 100) + '%">' + MAST_META + ' meta</span><span>50</span></div>' : '';
       var vista = state.mastVista || 'del', barras;
       if (vista === 'del') {
@@ -3401,10 +3402,10 @@
         tile('Más de un cuarto', hayCuarto ? nf(pMul) + '%' : '–', hayCuarto ? 'meta &lt;' + MAST_META_PCT + '%' : 'sin cuarto anotado', hayCuarto ? cls(pMul, MAST_META_PCT) : '') +
         tile('Primeros 30 días', conD.length ? nf(p30 / conD.length * 100) + '%' : '–', 'de los casos') +
         tile('Primíparas', conN.length ? nf(pri / conN.length * 100) + '%' : '–', 'de los casos') + '</div>' +
-        '<div class="mtg"><button data-a="mastv" data-v="del"' + (vista === 'del' ? ' class="on"' : '') + '>Por días en leche</button><button data-a="mastv" data-v="mes"' + (vista === 'mes' ? ' class="on"' : '') + '>Por mes</button></div>' +
+        '<div class="mtg"><button data-a="mastv" data-mv="del"' + (vista === 'del' ? ' class="on"' : '') + '>Por días en leche</button><button data-a="mastv" data-mv="mes"' + (vista === 'mes' ? ' class="on"' : '') + '>Por mes</button></div>' +
         '<div class="mab">' + barras.map(function (o) { return '<div><i style="height:' + Math.round(o.n / mx * 100) + '%"></i><b>' + (o.n || '') + '</b></div>'; }).join('') + '</div>' +
         '<div class="mabl">' + barras.map(function (o) { return '<span>' + o.l + '</span>'; }).join('') + '</div>' +
-        '<p class="cap">Criterios y metas de Michigan State University (Ruegg): un caso es mastitis en uno o más cuartos de la vaca; otro registro dentro de 14 días es el mismo caso. Un mes sin casos puede ser un mes sin registro.</p></section>';
+        '<p class="cap">Criterios y metas de Michigan State University (Ruegg): un caso es mastitis en uno o más cuartos de la vaca; otro registro dentro de 14 días es el mismo caso. Verde: lejos de la meta; ámbar: cerca de la meta (de 20 a 24 casos, o de 17 % a 20 %); rojo: en la meta o arriba. Un mes sin casos puede ser un mes sin registro.</p></section>';
     }
     function histHTML(a, h) {
       var t = today(), R = resumenHist(h), segs = R.segs.slice().reverse();
@@ -5955,8 +5956,8 @@
       else if (a === 'idxmas') { state.idxN = (state.idxN || 40) + 60; render(); }
       else if (a === 'ixtoro') { state.idxToro = b.dataset.tor; render(); }
       else if (a === 'ixtoros') { state.idxToro = null; render(); }
-      else if (a === 'mastv') { state.mastVista = b.dataset.v; render(); }
-      else if (a === 'tzsel') { state.tzSel = state.tzSel === b.dataset.f ? null : b.dataset.f; render(); }
+      else if (a === 'mastv') { state.mastVista = b.dataset.mv; render(); }
+      else if (a === 'tzsel') { state.tzSel = state.tzSel === b.dataset.tzf ? null : b.dataset.tzf; render(); }
       else if (a === 'ajustes') openSheet('Ajustes');
       else if (a === 'cerrar') closeSheet();
       else if (a === 'guardar') guardarSheet();
