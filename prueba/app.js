@@ -3081,7 +3081,7 @@
       'Las vacas': ['', '<path d="M6 10h16l-2 14H8zM6 10c0-3 3.5-5 8-5s8 2 8 5M14 13.5s-2.5 3-2.5 4.6a2.5 2.5 0 0 0 5 0c0-1.6-2.5-4.6-2.5-4.6z"/>'] };
     var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días, tactos y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición',
       'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
-      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron', 'Mastitis': 'Casos de los últimos 12 meses' };
+      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron', 'Mastitis': 'Casos, metas y días en leche' };
     // G: [título, html, crudo] (crudo = el html ya trae su propio título)
     function mosaicoHTML(tab, G) {
       G = G.filter(function (g) { return g[1]; }); state.msec = state.msec || {};
@@ -3344,35 +3344,67 @@
       return '<section class="card"><h2>Sanidad</h2><ul class="sanl">' + filas + '</ul>' +
         (nT ? '<p class="cap" style="margin-top:8px">' + (lp ? nL + (nL === 1 ? ' mastitis' : ' mastitis') + ' en esta lactancia · ' : '') + nT + ' en toda la vida</p>' : '') + '</section>';
     }
+    // informe de mastitis (nov 2026, opción B con criterios de Michigan State / Ruegg): caso a nivel de vaca (otro registro de la
+    // misma vaca dentro de 14 días es el mismo caso); casos cada 100 vacas en ordeñe por año (meta < 24); repetidos en la lactancia
+    // (meta < 20 %); más de un cuarto (meta < 20 %); barras por días en leche o por mes
+    var MAST_META = 24, MAST_META_PCT = 20;
     function mastitisHTML() {
       if (!DB.hist) return '';
-      var ref = DB.fecha || today(), desde = A.addDays ? A.addDays(ref, -365) : null;
-      if (!desde) { var d = new Date(ref + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 365); desde = d.toISOString().slice(0, 10); }
-      var casos = [], porVaca = {};
-      infLista().forEach(function (x, i) {
-        (x.h.sa || []).forEach(function (e) {
-          if (e[1] !== 'M' || e[0] <= desde || e[0] > ref || !enSel(unidadEn(x, e[0]))) return;
-          var p = sanPartoAntes(x.h, e[0]); casos.push({ f: e[0], dpp: p ? A.diffDays(e[0], p[0]) : null, nro: p ? p[1] : null });
-          porVaca[i] = (porVaca[i] || 0) + 1;
+      var ref = DB.fecha || today(), desde = A.addDays(ref, -365), casos = [], vacasDias = 0, hayCuarto = false;
+      var cuarto = function (t) { return /\b[ap]\.?\s?[id]\b\.?/i.test(t || ''); };
+      infLista().forEach(function (x, ix) {
+        var h = x.h, pa = h.pa || [], fb = x.a.bFecha || null;
+        // días en ordeñe dentro de los 12 meses: de cada parto al secado (o al parto siguiente, la baja o hoy)
+        pa.forEach(function (p, i) {
+          var fin = p[5] || (pa[i + 1] ? pa[i + 1][0] : (fb || ref)), a0 = p[0] > desde ? p[0] : desde, b0 = fin < ref ? fin : ref;
+          if (b0 > a0 && enSel(unidadEn(x, a0))) vacasDias += A.diffDays(b0, a0);
+        });
+        var ult = null, cur = null;
+        (h.sa || []).forEach(function (e) {
+          if (e[1] !== 'M') return;
+          if (ult && A.diffDays(e[0], ult) <= 14 && cur) { if (e[2]) cur.q[e[2]] = 1; ult = e[0]; return; }
+          var p = sanPartoAntes(h, e[0]);
+          cur = { v: ix, f: e[0], q: {}, dpp: p ? A.diffDays(e[0], p[0]) : null, nro: p ? p[1] : null, lac: p ? p[0] : '' };
+          if (e[2]) cur.q[e[2]] = 1; if (cuarto(e[2])) hayCuarto = true;
+          ult = e[0]; casos.push(cur);
+          cur.u = enSel(unidadEn(x, e[0]));
         });
       });
+      var visto = {};
+      casos.sort(function (a, b) { return a.f < b.f ? -1 : a.f > b.f ? 1 : 0; }).forEach(function (c) { var k = c.v + '|' + c.lac; c.rep = !!visto[k]; visto[k] = 1; });
+      casos = casos.filter(function (c) { return c.u && c.f > desde && c.f <= ref; });
       if (!casos.length) return '';
-      var vacas = Object.keys(porVaca), rep = vacas.filter(function (k) { return porVaca[k] >= 2; }).length, rep3 = vacas.filter(function (k) { return porVaca[k] >= 3; }).length;
-      var conD = casos.filter(function (c) { return c.dpp != null; }), p30 = conD.filter(function (c) { return c.dpp < 30; }).length;
+      var vacas = {}; casos.forEach(function (c) { vacas[c.v] = 1; }); var nV = Object.keys(vacas).length;
+      var vo = vacasDias / 365, inc = vo >= 10 ? casos.length / vo * 100 : null;
+      var rep = casos.filter(function (c) { return c.rep; }).length, multi = casos.filter(function (c) { return Object.keys(c.q).filter(cuarto).length > 1; }).length;
+      var conD = casos.filter(function (c) { return c.dpp != null; }), p30 = conD.filter(function (c) { return c.dpp <= 30; }).length;
       var conN = casos.filter(function (c) { return c.nro; }), pri = conN.filter(function (c) { return c.nro === 1; }).length;
-      var MS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'], meses = [], y = +ref.slice(0, 4), m = +ref.slice(5, 7);
-      for (var k = 0; k < 12; k++) { meses.unshift({ k: y + '-' + (m < 10 ? '0' : '') + m, l: MS[m - 1], n: 0 }); if (--m < 1) { m = 12; y--; } }
-      casos.forEach(function (c) { meses.forEach(function (o) { if (c.f.slice(0, 7) === o.k) o.n++; }); });
-      var mx = Math.max.apply(null, meses.map(function (o) { return o.n; })) || 1;
-      var tile = function (t, v, sub) { return '<div class="mk"><span>' + t + '</span><b>' + v + '</b>' + (sub ? ' <small>' + sub + '</small>' : '') + '</div>'; };
-      return '<section class="card"><h2>Mastitis</h2><div class="mks">' +
-        tile('Casos', nf(casos.length), 'en ' + nf(vacas.length) + (vacas.length === 1 ? ' vaca' : ' vacas')) +
-        tile('Repetidas', nf(rep), rep === 1 ? 'vaca' + (rep3 ? ', ' + rep3 + ' con 3+' : '') : 'vacas' + (rep3 ? ', ' + rep3 + ' con 3+' : '')) +
+      var cls = function (v, meta) { return v == null ? '' : v < meta ? ' ok' : ' mal'; };
+      var tile = function (t, v, sub, c) { return '<div class="mk"><span>' + t + '</span><b class="' + (c || '') + '">' + v + '</b>' + (sub ? ' <small>' + sub + '</small>' : '') + '</div>'; };
+      var pRep = rep / casos.length * 100, pMul = multi / casos.length * 100;
+      var big = inc != null ? '<div class="mbig"><b class="' + cls(inc, MAST_META) + '">' + nf(inc) + '</b><span>casos cada 100 vacas en ordeñe por año</span></div>' +
+        '<div class="mmeter"><i style="width:' + (MAST_META / 50 * 100) + '%"></i><u style="left:' + Math.min(99, inc / 50 * 100) + '%"></u></div>' +
+        '<div class="mml"><span>0</span><span style="left:' + (MAST_META / 50 * 100) + '%">' + MAST_META + ' meta</span><span>50</span></div>' : '';
+      var vista = state.mastVista || 'del', barras;
+      if (vista === 'del') {
+        var B = [['0–30', 0, 30], ['31–60', 31, 60], ['61–100', 61, 100], ['101–200', 101, 200], ['201–300', 201, 300], ['+300', 301, 1e9]].map(function (b) { return { l: b[0], n: conD.filter(function (c) { return c.dpp >= b[1] && c.dpp <= b[2]; }).length }; });
+        barras = B;
+      } else {
+        var MS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'], y = +ref.slice(0, 4), m = +ref.slice(5, 7); barras = [];
+        for (var k = 0; k < 12; k++) { barras.unshift({ k: y + '-' + (m < 10 ? '0' : '') + m, l: MS[m - 1], n: 0 }); if (--m < 1) { m = 12; y--; } }
+        casos.forEach(function (c) { barras.forEach(function (o) { if (c.f.slice(0, 7) === o.k) o.n++; }); });
+      }
+      var mx = Math.max.apply(null, barras.map(function (o) { return o.n; })) || 1;
+      return '<section class="card"><h2>Mastitis</h2><p class="cap" style="margin:-4px 0 10px">' + nf(casos.length) + (casos.length === 1 ? ' caso' : ' casos') + ' en ' + nf(nV) + (nV === 1 ? ' vaca' : ' vacas') + ' · últimos 12 meses</p>' + big +
+        '<div class="mks">' +
+        tile('Repetidos', nf(pRep) + '%', 'meta &lt;' + MAST_META_PCT + '%', cls(pRep, MAST_META_PCT)) +
+        tile('Más de un cuarto', hayCuarto ? nf(pMul) + '%' : '–', hayCuarto ? 'meta &lt;' + MAST_META_PCT + '%' : 'sin cuarto anotado', hayCuarto ? cls(pMul, MAST_META_PCT) : '') +
         tile('Primeros 30 días', conD.length ? nf(p30 / conD.length * 100) + '%' : '–', 'de los casos') +
         tile('Primíparas', conN.length ? nf(pri / conN.length * 100) + '%' : '–', 'de los casos') + '</div>' +
-        '<div class="mab">' + meses.map(function (o) { return '<div title="' + o.l + ': ' + o.n + '"><i style="height:' + Math.round(o.n / mx * 100) + '%"></i><b>' + (o.n || '') + '</b></div>'; }).join('') + '</div>' +
-        '<div class="mabl">' + meses.map(function (o) { return '<span>' + o.l + '</span>'; }).join('') + '</div>' +
-        '<p class="cap">Casos de mastitis clínica anotados en el programa en los últimos 12 meses. Un mes sin casos puede ser un mes sin registro.</p></section>';
+        '<div class="mtg"><button data-a="mastv" data-v="del"' + (vista === 'del' ? ' class="on"' : '') + '>Por días en leche</button><button data-a="mastv" data-v="mes"' + (vista === 'mes' ? ' class="on"' : '') + '>Por mes</button></div>' +
+        '<div class="mab">' + barras.map(function (o) { return '<div><i style="height:' + Math.round(o.n / mx * 100) + '%"></i><b>' + (o.n || '') + '</b></div>'; }).join('') + '</div>' +
+        '<div class="mabl">' + barras.map(function (o) { return '<span>' + o.l + '</span>'; }).join('') + '</div>' +
+        '<p class="cap">Criterios y metas de Michigan State University (Ruegg): un caso es mastitis en uno o más cuartos de la vaca; otro registro dentro de 14 días es el mismo caso. Un mes sin casos puede ser un mes sin registro.</p></section>';
     }
     function histHTML(a, h) {
       var t = today(), R = resumenHist(h), segs = R.segs.slice().reverse();
@@ -5923,6 +5955,7 @@
       else if (a === 'idxmas') { state.idxN = (state.idxN || 40) + 60; render(); }
       else if (a === 'ixtoro') { state.idxToro = b.dataset.tor; render(); }
       else if (a === 'ixtoros') { state.idxToro = null; render(); }
+      else if (a === 'mastv') { state.mastVista = b.dataset.v; render(); }
       else if (a === 'tzsel') { state.tzSel = state.tzSel === b.dataset.f ? null : b.dataset.f; render(); }
       else if (a === 'ajustes') openSheet('Ajustes');
       else if (a === 'cerrar') closeSheet();
