@@ -3721,6 +3721,7 @@
     // arma una "hoja" para la imagen: encabezado, título, contexto, dato clave, contenido y firma
     function shHoja(titulo, ctx, clave, nodo, alto) {
       var conNom = shNombre(), w = document.createElement('div');
+      w.setAttribute('data-shhoja', '1');
       w.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;' + (alto ? 'min-height:' + alto + 'px;' : '') + 'box-sizing:border-box;padding:14px;background:#F0F2F3;color-scheme:light;font-family:var(--sans);display:flex;flex-direction:column;' +
         '--bg:#F0F2F3;--surface:#FFFFFF;--ink:#1F2427;--muted:#5C656C;--line:#D9DDE0;--navy:#2B3034;--on-navy:#FFFFFF;--gold:#2EC4B6;--link:#13877C;--prenada:#16794A;--servida:#6B3FA0;--vacia:#B3261E;--ciclando:#2457A6;--apta:#8A6510;--sin:#5C656C;--descarte:#B3261E;--bar:#9FB0CC;--bar-last:#12274A;--cl1:#C9A227;--cl2:#12274A;--clm:#0E7C86;--medal:#C9A227';
       w.innerHTML = '<div style="background:#2B3034;color:#fff;border-radius:14px;padding:12px 16px;margin-bottom:12px;border-bottom:4px solid #2EC4B6"><div style="font-size:12px;letter-spacing:.06em;color:#3DD6C9;font-weight:700">DR. MAURO TORTEROLO</div><div style="font-size:21px;font-weight:800;line-height:1.2">' + esc(conNom ? (PERFIL.nombre || 'Tambo') : 'Tambo') + '</div><div style="font-size:13px;opacity:.85">Datos al ' + A.fmt(DB.fecha || today()) + '</div></div>' +
@@ -3735,7 +3736,7 @@
     function shLimpio(sec) {
       var c = sec.cloneNode(true);
       c.classList.add('open'); c.style.cssText = 'border:0;padding:0;margin:0;background:transparent;box-shadow:none';
-      Array.prototype.forEach.call(c.querySelectorAll('.shbtn,.shic,.pdesc,.chev,details.nota,.despbtn,.insbtns,.filters,.secfecha,button.lnk,p.cap,.ralhint,h2,.clclave'), function (x) { x.remove(); });
+      Array.prototype.forEach.call(c.querySelectorAll('.shbtn,.shic,.pdesc,.chev,details.nota,.despbtn,.insbtns,.filters,.secfecha,button.lnk,p.cap,.ralhint,h2,.clclave,.secsel'), function (x) { x.remove(); });
       Array.prototype.forEach.call(c.querySelectorAll('.plgh'), function (x) { x.remove(); });
       return c;
     }
@@ -3745,11 +3746,31 @@
       Array.prototype.forEach.call(doc.styleSheets, function (sh) { try { limpiar(sh.cssRules); } catch (e) {} });
       Array.prototype.forEach.call(doc.querySelectorAll('[style*="color-mix"]'), function (el) { el.style.cssText = el.style.cssText.replace(/[a-z-]+\s*:\s*color-mix\([^;]*\)\s*;?/g, ''); });
     }
+    // el navegador puede dar colores como color(srgb …) (por ejemplo, cuando una variable trae color-mix); html2canvas no los entiende
+    // y la imagen falla. En la copia, cada color así de la hoja se pasa a rgba() en el estilo del elemento
+    var SH_COLS = ['color', 'background-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline-color', 'text-decoration-color', 'fill', 'stroke', 'box-shadow', 'background-image'];
+    function aRgba(v) {
+      return v.replace(/color\(srgb\s+([\d.e-]+)\s+([\d.e-]+)\s+([\d.e-]+)(?:\s*\/\s*([\d.e-]+%?))?\)/g, function (m, r, g, b, a) {
+        var al = a == null ? 1 : /%$/.test(a) ? parseFloat(a) / 100 : +a, c = function (x) { return Math.round(Math.max(0, Math.min(1, +x)) * 255); };
+        return 'rgba(' + c(r) + ',' + c(g) + ',' + c(b) + ',' + al + ')';
+      });
+    }
+    function sinColorFn(doc) {
+      var hoja = doc.querySelector('[data-shhoja]'); if (!hoja) return;
+      var win = doc.defaultView || window;
+      [hoja].concat(Array.prototype.slice.call(hoja.querySelectorAll('*'))).forEach(function (el) {
+        var cs = win.getComputedStyle(el);
+        SH_COLS.forEach(function (pr) {
+          var v = cs.getPropertyValue(pr);
+          if (v && /color\(|oklch\(|oklab\(|lab\(|lch\(/.test(v)) el.style.setProperty(pr, /color\(srgb/.test(v) ? aRgba(v) : (pr === 'box-shadow' || pr === 'background-image' ? 'none' : 'transparent'), 'important');
+        });
+      });
+    }
     function shImagen(w) {
       document.body.appendChild(w);
       return cargarH2C().then(function (h2c) {
         return h2c(w, { scale: 2.7, backgroundColor: '#F0F2F3', logging: false,
-          onclone: function (doc) { Array.prototype.forEach.call(doc.styleSheets, function (sh) { var rs; try { rs = sh.cssRules; } catch (e) { return; } for (var q = rs.length - 1; q >= 0; q--) if (rs[q].media && /dark/.test(rs[q].media.mediaText)) sh.deleteRule(q); }); sinColorMix(doc); Array.prototype.forEach.call(doc.querySelectorAll('.lvtap'), function (el) { el.style.boxShadow = 'none'; el.style.border = '1px solid #D9DDE0'; }); } });
+          onclone: function (doc) { Array.prototype.forEach.call(doc.styleSheets, function (sh) { var rs; try { rs = sh.cssRules; } catch (e) { return; } for (var q = rs.length - 1; q >= 0; q--) if (rs[q].media && /dark/.test(rs[q].media.mediaText)) sh.deleteRule(q); }); sinColorMix(doc); sinColorFn(doc); Array.prototype.forEach.call(doc.querySelectorAll('.lvtap'), function (el) { el.style.boxShadow = 'none'; el.style.border = '1px solid #D9DDE0'; }); } });
       }).then(function (cv) { w.remove(); marcaAgua(cv); return new Promise(function (ok) { cv.toBlob(ok, 'image/png'); }); }, function (e) { w.remove(); throw e; });
     }
     // marca de agua: la firma repetida en diagonal, muy tenue, sobre toda la imagen (aunque la recorten, sigue estando)
@@ -4158,7 +4179,7 @@
     function ctlGrafHTML(V0) {
       if (!V0 || V0.length < 10 || V0.some(function (v) { return v.del == null; })) return '';
       var MX = ctlMax(), V = MX ? V0.filter(function (v) { return v.del <= MX; }) : V0, fuera = V0.length - V.length;
-      var chips = '<div class="secsel" aria-label="Días en leche"><span>Hasta</span>' + CTL_MAXS.map(function (n) { return '<button class="fchip plain" data-ctlmax="' + n + '" aria-pressed="' + (MX === n) + '">' + (n || 'Todos') + '</button>'; }).join('') + '</div>';
+      var chips = '<div class="secsel" aria-label="Días en leche"><span>Hasta</span>' + CTL_MAXS.map(function (n) { return '<button class="fchip plain" data-ctlmax="' + n + '" data-ctx="' + (n ? 'Hasta ' + n + ' días en leche' : 'Todos los días en leche') + '" aria-pressed="' + (MX === n) + '">' + (n || 'Todos') + '</button>'; }).join('') + '</div>';
       if (V.length < 10) return '<section class="card fijo ctlgraf"><h2>Curva del tambo</h2>' + chips + '<p class="hint" style="margin:0">Hay menos de 10 vacas hasta ' + MX + ' días en leche.</p></section>';
       var R = ctlTramos(V); if (R[1].length + R[2].length < 2) return '<section class="card fijo ctlgraf"><h2>Curva del tambo</h2>' + chips + '<p class="hint" style="margin:0">No hay tramos con 5 vacas o más.</p></section>';
       var W = 340, H = 240, L = 34, R_ = 10, T = 24, B = 32;
