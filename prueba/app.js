@@ -876,7 +876,7 @@
     function cargarDhm() {
       if (root.Dhm && root.MDBReader) return Promise.resolve(root.Dhm);
       var uno = function (src) { return new Promise(function (ok, mal) { var s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = function () { mal(new Error('no se pudo descargar el lector de DHM (hace falta internet la primera vez)')); }; document.head.appendChild(s); }); };
-      return (root.MDBReader ? Promise.resolve() : uno('mdb-reader.js?v=1')).then(function () { return root.Dhm ? null : uno('dhm.js?v=7'); }).then(function () { if (!root.Dhm || !root.MDBReader) throw new Error('no se pudo cargar el lector de DHM'); return root.Dhm; });
+      return (root.MDBReader ? Promise.resolve() : uno('mdb-reader.js?v=1')).then(function () { return root.Dhm ? null : uno('dhm.js?v=8'); }).then(function () { if (!root.Dhm || !root.MDBReader) throw new Error('no se pudo cargar el lector de DHM'); return root.Dhm; });
     }
     // exportación de DelPro (DeLaval): .zip con las tablas en CSV; el lector se baja recién la primera vez
     function cargarDelpro() {
@@ -964,7 +964,7 @@
         if (enN[b.key]) {
           // la baja está en los dos: se completa su historia (el respaldo nuevo recorta partos viejos)
           var hn = N.hist[b.key]; if (!hn) { N.hist[b.key] = hv; return; }
-          ['pa', 'ev', 'ta', 'la', 'ct', 'ab', 'ec', 'mv'].forEach(function (k) { if (hv[k] || hn[k]) hn[k] = unir(hn[k], hv[k], k === 'ta' ? 2 : 0); });
+          ['pa', 'ev', 'ta', 'la', 'ct', 'ab', 'ec', 'mv', 'sa'].forEach(function (k) { if (hv[k] || hn[k]) hn[k] = unir(hn[k], hv[k], k === 'ta' ? 2 : 0); });
           return;
         }
         if (vivo[b.key]) return;
@@ -3068,10 +3068,11 @@
       'Gestión': ['', '<rect x="3" y="8" width="22" height="13" rx="2"/><circle cx="14" cy="14.5" r="3"/><path d="M7 11.5v.01M21 17.5v.01"/>'],
       'Sanidad': ['', '<path d="M19.5 3.5l5 5M22 6l-3 3M18 7.5l2.5 2.5-10 10-4-4zM8.5 19.5L4 24M12 13.5l1.5 1.5M14.5 11l1.5 1.5"/>'],
       'Evolución': ['', '<path d="M4 4v20h20M7.5 19l5-5.5 4 3 6.5-8M19.5 8.5H23V12"/>'],
+      'Mastitis': ['', '<path d="M14 3.5s-7.5 8.6-7.5 14a7.5 7.5 0 0 0 15 0c0-5.4-7.5-14-7.5-14z"/><path d="M14 13v8M10 17h8"/>'],
       'Las vacas': ['', '<path d="M6 10h16l-2 14H8zM6 10c0-3 3.5-5 8-5s8 2 8 5M14 13.5s-2.5 3-2.5 4.6a2.5 2.5 0 0 0 5 0c0-1.6-2.5-4.6-2.5-4.6z"/>'] };
     var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días, tactos y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición',
       'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
-      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron' };
+      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron', 'Mastitis': 'Casos de los últimos 12 meses' };
     // G: [título, html, crudo] (crudo = el html ya trae su propio título)
     function mosaicoHTML(tab, G) {
       G = G.filter(function (g) { return g[1]; }); state.msec = state.msec || {};
@@ -3320,6 +3321,50 @@
       }
       return CRIAS.m[rp] || [];
     }
+    /* ----- Sanidad (nov 2026): eventos sanitarios de la vaca (mastitis, secado con tratamiento, patas, otros) e informe de mastitis ----- */
+    function sanPartoAntes(h, f) { var r = null; (h.pa || []).forEach(function (p) { if (p[0] <= f) r = p; }); return r; }
+    function sanNombre(e) { return e[1] === 'S' ? 'Secado' : e[2] || (e[1] === 'M' ? 'Mastitis' : e[1] === 'P' ? 'Patas' : 'Evento sanitario'); }
+    function sanidadHTML(h) {
+      var S = (h && h.sa) || []; if (!S.length) return '';
+      var lp = sanPartoAntes(h, '9999'), nL = 0, nT = 0;
+      S.forEach(function (e) { if (e[1] === 'M') { nT++; if (lp && e[0] >= lp[0]) nL++; } });
+      var filas = S.slice().reverse().map(function (e) {
+        var p = sanPartoAntes(h, e[0]), der = e[1] === 'S' ? (p && p[1] ? 'Lact. ' + p[1] : '') : (p ? A.diffDays(e[0], p[0]) + ' dpp' : '');
+        return '<li><span class="f">' + A.fmt(e[0]) + '</span><span><span class="' + (e[1] === 'M' ? 'ma' : e[1] === 'S' ? 'se' : 'ot') + '">' + esc(sanNombre(e)) + '</span>' + (e[3] ? '<small>' + esc(String(e[3]).replace(/\s*\+\s*/g, ' + ')) + '</small>' : '') + '</span><span class="d">' + der + '</span></li>';
+      }).join('');
+      return '<section class="card"><h2>Sanidad</h2><ul class="sanl">' + filas + '</ul>' +
+        (nT ? '<p class="cap" style="margin-top:8px">' + (lp ? nL + (nL === 1 ? ' mastitis' : ' mastitis') + ' en esta lactancia · ' : '') + nT + ' en toda la vida</p>' : '') + '</section>';
+    }
+    function mastitisHTML() {
+      if (!DB.hist) return '';
+      var ref = DB.fecha || today(), desde = A.addDays ? A.addDays(ref, -365) : null;
+      if (!desde) { var d = new Date(ref + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 365); desde = d.toISOString().slice(0, 10); }
+      var casos = [], porVaca = {};
+      infLista().forEach(function (x, i) {
+        (x.h.sa || []).forEach(function (e) {
+          if (e[1] !== 'M' || e[0] <= desde || e[0] > ref || !enSel(unidadEn(x, e[0]))) return;
+          var p = sanPartoAntes(x.h, e[0]); casos.push({ f: e[0], dpp: p ? A.diffDays(e[0], p[0]) : null, nro: p ? p[1] : null });
+          porVaca[i] = (porVaca[i] || 0) + 1;
+        });
+      });
+      if (!casos.length) return '';
+      var vacas = Object.keys(porVaca), rep = vacas.filter(function (k) { return porVaca[k] >= 2; }).length, rep3 = vacas.filter(function (k) { return porVaca[k] >= 3; }).length;
+      var conD = casos.filter(function (c) { return c.dpp != null; }), p30 = conD.filter(function (c) { return c.dpp < 30; }).length;
+      var conN = casos.filter(function (c) { return c.nro; }), pri = conN.filter(function (c) { return c.nro === 1; }).length;
+      var MS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'], meses = [], y = +ref.slice(0, 4), m = +ref.slice(5, 7);
+      for (var k = 0; k < 12; k++) { meses.unshift({ k: y + '-' + (m < 10 ? '0' : '') + m, l: MS[m - 1], n: 0 }); if (--m < 1) { m = 12; y--; } }
+      casos.forEach(function (c) { meses.forEach(function (o) { if (c.f.slice(0, 7) === o.k) o.n++; }); });
+      var mx = Math.max.apply(null, meses.map(function (o) { return o.n; })) || 1;
+      var tile = function (t, v, sub) { return '<div class="mk"><span>' + t + '</span><b>' + v + '</b>' + (sub ? ' <small>' + sub + '</small>' : '') + '</div>'; };
+      return '<section class="card"><h2>Mastitis</h2><div class="mks">' +
+        tile('Casos', nf(casos.length), 'en ' + nf(vacas.length) + (vacas.length === 1 ? ' vaca' : ' vacas')) +
+        tile('Repetidas', nf(rep), rep === 1 ? 'vaca' + (rep3 ? ', ' + rep3 + ' con 3+' : '') : 'vacas' + (rep3 ? ', ' + rep3 + ' con 3+' : '')) +
+        tile('Primeros 30 días', conD.length ? nf(p30 / conD.length * 100) + '%' : '–', 'de los casos') +
+        tile('Primíparas', conN.length ? nf(pri / conN.length * 100) + '%' : '–', 'de los casos') + '</div>' +
+        '<div class="mab">' + meses.map(function (o) { return '<div title="' + o.l + ': ' + o.n + '"><i style="height:' + Math.round(o.n / mx * 100) + '%"></i><b>' + (o.n || '') + '</b></div>'; }).join('') + '</div>' +
+        '<div class="mabl">' + meses.map(function (o) { return '<span>' + o.l + '</span>'; }).join('') + '</div>' +
+        '<p class="cap">Casos de mastitis clínica anotados en el programa en los últimos 12 meses. Un mes sin casos puede ser un mes sin registro.</p></section>';
+    }
     function histHTML(a, h) {
       var t = today(), R = resumenHist(h), segs = R.segs.slice().reverse();
       var dec = function (x, d) { return x == null ? '–' : x.toLocaleString('es-UY', { maximumFractionDigits: d, minimumFractionDigits: d }); };
@@ -3526,7 +3571,7 @@
           ['Último tacto', lt ? A.fmt(lt[0]) + (codes[lt[1]] ? ' <small>' + esc(codes[lt[1]][0]) + '</small>' : '') : null]
         ])) +
         (h && h.ct.length ? '<section class="card"><h2>Control lechero</h2>' + bars(h.ct.slice(-10).reverse().map(function (c) { return c[1]; })) + '</section>' : '') +
-        (h ? lactHTML(h) + (h.pa.length || h.ev.length || h.ta.length ? histHTML(a, h) : '') + ccHTML(h) : '') +
+        (h ? lactHTML(h) + (h.pa.length || h.ev.length || h.ta.length ? histHTML(a, h) : '') + sanidadHTML(h) + ccHTML(h) : '') +
         (h && h.corto ? '<p class="hint">Baja de hace más de 2 años: la app guarda solo los datos básicos. El historial completo está en ' + SRC() + '.</p>' : h && h.ult && h.pa.length ? '<p class="hint">De las bajas se guardan los últimos 2 años. El historial completo está en SysCaw.</p>' : '') +
         '<section class="card"><h2>Identificación</h2>' + kv([['RP', esc(a.rp)], ['Origen', esc(a.nombre)], ['Nacimiento', h && h.fn ? A.fmt(h.fn) : null], ['Edad al primer parto', h && h.fn && h.pa.length && h.pa[0][1] === 1 ? nf(A.diffDays(h.pa[0][0], h.fn) / 30.44, 1) + ' meses' : null], ['Madre (RP)', madre], ['Padre', h && h.pd ? esc(h.pd) : null]], 'kvs') + '</section>' +
         '<p class="src">' + SRCbase().replace(/^./, function (c) { return c.toUpperCase(); }) + (DB.fecha ? ' del ' + A.fmt(DB.fecha) : '') + '</p>';
@@ -3566,7 +3611,7 @@
         '<div class="fhchips">' + chip(a) + (repetidora(a) ? SELLO_REP : '') + (a.rech ? '<span class="chip descarte">Descarte</span>' : '') + (!esOperario() && paraVenta(a) ? '<span class="chip venta2">Para venta</span>' : '') + (atrasoFicha(a) ? '<span class="chip venta2">Parto atrasado</span>' : '') + '</div></div>' + idxBadge(a) + '</header>' +
         fest + (datos ? '<section class="card datos">' + datos + '</section>' : '') +
         (h && h.ct.length ? '<section class="card"><h2>Control lechero</h2>' + prodHistHTML(a, h) + '</section>' : (bars(a.pr || []) ? '<section class="card"><h2>Control lechero</h2>' + bars(a.pr) + '</section>' : '')) +
-        (h ? lactHTML(h) + (h.pa.length || h.ev.length || h.ta.length ? histHTML(a, h) : '') + ccHTML(h) : '') +
+        (h ? lactHTML(h) + (h.pa.length || h.ev.length || h.ta.length ? histHTML(a, h) : '') + sanidadHTML(h) + ccHTML(h) : '') +
         idxFichaHTML(a) +
         '<section class="card"><h2>Identificación</h2>' + kv([['RP', esc(a.rp)], ['Origen', esc(a.nombre)], ['Id electrónica', esc(a.idElec)], ['Nacimiento', h && h.fn ? A.fmt(h.fn) : null], ['Edad al primer parto', h && h.fn && h.pa.length && h.pa[0][1] === 1 ? nf(A.diffDays(h.pa[0][0], h.fn) / 30.44, 1) + ' meses' : null], ['Madre (RP)', madre], ['Padre', h && h.pd ? esc(h.pd) : null], ['Rodeo', esc(a.rod)]], 'kvs') + '</section>' +
         (h ? '<p class="src">Historial ' + (externo(DB.origen) ? 'de la ' : 'del ') + SRCbase() + (DB.fecha ? ' del ' + A.fmt(DB.fecha) : '') + '</p>' : '');
@@ -4063,7 +4108,7 @@
             sub: (i + 1) + 'º · ' + (pv != null ? 'antes ' + nf(pv, 1) + ' L (' + (d >= 0 ? '+' : '−') + nf(Math.abs(d), 1) + ')' : 'sin control anterior') + ' · ' + v.del + ' días en leche · ' + (v.n === 1 ? '1ª lactancia' : v.n + 'ª lactancia') });
         }).join('') + '</section>';
       var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
-      return '<h1 class="ptitle">Leche</h1>' + res + mosaicoHTML('leche', [['Evolución', evolHTML() + curvasHTML()], ['Las vacas', porLote + top5 + caida + tabla]]);
+      return '<h1 class="ptitle">Leche</h1>' + res + mosaicoHTML('leche', [['Evolución', evolHTML() + curvasHTML()], ['Las vacas', porLote + top5 + caida + tabla], ['Mastitis', mastitisHTML(), true]]);
     }
 
     /* ----- activación por tambo: links firmados por el Dr. Mauro Torterolo ----- */

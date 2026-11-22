@@ -77,7 +77,7 @@
       if (r[3] === 'M') toro[r[0]] = tx(r[5]) || tx(r[8]) || (r[1] ? String(r[1]) : '');
       else H.push({ g: r[0], rp: r[1] != null && String(r[1]).trim() !== '' ? String(r[1]).trim() : tx(r[8]), fn: fch(r[2]), est: r[4], ub: tx(r[6]).toUpperCase(), vl: r[7] || 0 });
     });
-    var G = {}; H.forEach(function (a) { G[a.g] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sec: [], baja: null, desc: null, ec: null, ctAll: [] }; });
+    var G = {}; H.forEach(function (a) { G[a.g] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sec: [], baja: null, desc: null, ec: null, ctAll: [], sa: [] }; });
     var maxF = '0000';
     var partosH = [];
     filas(db, 'select EventoGUID, AnimalGUID, EventoFch, TipoEventoId from Evento where EventoEstadoId <> 2').forEach(function (r) {
@@ -94,6 +94,7 @@
       else if (t === T.TACTO) { var e = D(id, 'ESTADOVACA', 'n'); if (e) g.ta.push([f, e]); }
       else if (t === T.CONTROL) { var l = (D(id, 'LITROSAM', 'n') || 0) + (D(id, 'LITROSPM', 'n') || 0); if (l > 0) g.ctAll.push([f, Math.round(l * 10) / 10, null, null, null]); }
       else if (t === T.SECADO) g.sec.push(f);
+      else if (t === T.MASTITIS) g.sa.push([f, 'M', null, null]);
       else if (t === T.ABORTO) g.ab.push(f);
       else if (t === T.BAJA) { if (!g.baja || f > g.baja[0]) g.baja = [f, D(id, 'CAUSABAJAID', 'n')]; }
       else if (t === T.DESCARTE) { if (!g.desc || f > g.desc[0]) g.desc = [f, D(id, 'MOTIVODESCARTE', 'n')]; }
@@ -164,7 +165,7 @@
         if (!bF || bF >= desdeHist) {
           var paB = g.pa.filter(function (p) { return p[0] >= desdeHist; }); if (!paB.length && g.pa.length) paB = [g.pa[g.pa.length - 1]];
           var dB = paB.length ? paB[0][0] : '0000', dE = function (e) { return e[0] >= dB; }, nros = paB.map(function (p) { return p[1]; });
-          hist[key] = { mv: null, pa: paB, ev: g.ev.filter(dE), ta: g.ta.filter(dE), la: g.la.filter(function (l) { return nros.indexOf(l[0]) >= 0; }), ct: g.ct.filter(dE), ult: true, fn: a.fn, ma: maOf[a.g] || null, pd: null, vit: null };
+          hist[key] = { mv: null, pa: paB, ev: g.ev.filter(dE), ta: g.ta.filter(dE), la: g.la.filter(function (l) { return nros.indexOf(l[0]) >= 0; }), ct: g.ct.filter(dE), sa: g.sa.filter(dE), ult: true, fn: a.fn, ma: maOf[a.g] || null, pd: null, vit: null };
         } else hist[key] = { pa: [], ev: [], ta: [], la: [], ct: [], fn: a.fn, ma: maOf[a.g] || null, pd: null, vit: null, corto: true };
         return;
       }
@@ -196,7 +197,7 @@
         dLac: lp && (cat === 'vaca' || cat === 'seca') ? diffDays(ref, lp[0]) : null,
         prodLts: curLac ? curLac[1] : null, mej: mejs.length ? Math.max.apply(null, mejs) : null
       });
-      hist[rp] = { mv: null, ec: g.ec, pa: g.pa, ev: g.ev, ta: g.ta, la: g.la, ct: g.ct, ab: g.ab, fn: a.fn, ma: maOf[a.g] || null, pd: null, vit: null };
+      hist[rp] = { mv: null, ec: g.ec, pa: g.pa, ev: g.ev, ta: g.ta, la: g.la, ct: g.ct, sa: g.sa.length ? g.sa.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; }) : null, ab: g.ab, fn: a.fn, ma: maOf[a.g] || null, pd: null, vit: null };
     });
     animales.sort(function (x, y) { return x.rp.localeCompare(y.rp, 'es', { numeric: true }); });
     bajas.sort(function (x, y) { return (y.bFecha || '') < (x.bFecha || '') ? -1 : 1; });

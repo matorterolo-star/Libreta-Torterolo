@@ -131,7 +131,7 @@
     var visto = {}, unico = function (tipo, id, f) { var k = tipo + '|' + id + '|' + f; if (visto[k]) return false; visto[k] = 1; return true; };
     // historial por hembra
     var G = {}, maxF = '0000';
-    var g = function (id) { return G[id] || (G[id] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [] }); };
+    var g = function (id) { return G[id] || (G[id] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sa: [] }); };
     var ver = function (f) { if (f && f > maxF) maxF = f; };
     servs.forEach(function (s) { if (!mio[s.Ani_IdAnimal]) return; var f = fch(s.Ser_Fecha); if (!f || !unico('S', s.Ani_IdAnimal, f)) return; ver(f); g(s.Ani_IdAnimal).ev.push([f, 'S', toroDe(s), null, s.Ser_IdServicio, s.Est_IdEstablecimiento]); });
     T('DHM_Celos', ['Ani_IdAnimal', 'Cel_Fecha']).forEach(function (c) { if (!mio[c.Ani_IdAnimal]) return; var f = fch(c.Cel_Fecha); if (!f || !unico('C', c.Ani_IdAnimal, f)) return; ver(f); g(c.Ani_IdAnimal).ev.push([f, 'C', '', null]); });
@@ -188,6 +188,22 @@
       var dr = e.Med_IdMedicamento ? medic[e.Med_IdMedicamento] : null;
       ver(f); g(e.Ani_IdAnimal).ta.push(dr ? [f, c, dr] : [f, c]);
     });
+    // sanidad (nov 2026): [fecha, tipo, detalle, tratamiento]; M mastitis, U otra de ubre (manca, CMT), S secado, P patas, E otro evento sanitario
+    var san = function (tabla, pre, tipo) {
+      T(tabla, ['Ani_IdAnimal', pre + '_Fecha', 'Dia_IdDiagnostico', 'Med_IdMedicamento', 'Tes_IdTipoEvSanitario']).forEach(function (r) {
+        var f = fch(r[pre + '_Fecha']); if (!mio[r.Ani_IdAnimal] || !f) return;
+        var d = diag[r.Dia_IdDiagnostico] || (r.Tes_IdTipoEvSanitario != null ? tesan[r.Tes_IdTipoEvSanitario] : '') || '', m = r.Med_IdMedicamento ? medic[r.Med_IdMedicamento] || null : null;
+        var t = typeof tipo === 'function' ? tipo(d) : tipo;
+        if (t === 'S' && !m) return;
+        g(r.Ani_IdAnimal).sa.push([f, t, d || null, m]);
+      });
+    };
+    var tesan = {}; T('DHM_TiposEvSanitarios', ['Tes_IdTipoEvSanitario', 'Tes_Descripcion']).forEach(function (t) { tesan[t.Tes_IdTipoEvSanitario] = frase(t.Tes_Descripcion); });
+    san('DHM_EnfermedadesUbre', 'Ubr', function (d) { return !d || /mastit/i.test(d) ? 'M' : 'U'; });
+    san('DHM_Secados', 'Sec', 'S');
+    san('DHM_EnfermedadesPatas', 'Pat', 'P');
+    san('DHM_EvSanitarios', 'Evs', 'E');
+    Object.keys(G).forEach(function (id) { G[id].sa.sort(cmp); });
     // bajas
     var desc = {}; T('DHM_Descartes', ['Ani_IdAnimal', 'Des_Fecha', 'Tde_IdTipoDescarte', 'Mde_IdMotivoDescarte', 'Des_Observaciones', 'Est_IdEstablecimiento']).forEach(function (d) { var f = fch(d.Des_Fecha), x = desc[d.Ani_IdAnimal]; if (!x || (f || '') >= (x.f || '')) desc[d.Ani_IdAnimal] = { f: f, t: d.Tde_IdTipoDescarte, m: d.Mde_IdMotivoDescarte, o: d.Des_Observaciones, u: d.Est_IdEstablecimiento }; });
     var motivo = {}; T('DHM_MotivosDescarte', ['Mde_IdMotivoDescarte', 'Mde_Descripcion']).forEach(function (m) { motivo[m.Mde_IdMotivoDescarte] = frase(m.Mde_Descripcion); });
@@ -270,7 +286,7 @@
       x.ct = desde ? x.ct.filter(function (c) { return c[0] >= desde; }) : [];
     });
 
-    var animales = [], hist = {}, bajas = [], vacio = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [] }, usados = {};
+    var animales = [], hist = {}, bajas = [], vacio = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sa: [] }, usados = {};
     var pa2 = function (P) { return P.filter(function (p) { return !/^A/.test(p[2] || ''); }).map(function (p) { return [p[0], p[5] || null]; }); }, VL = [];
     // caravana única: si hembras de distintas unidades comparten el RP, se agrega la unidad
     var uDeRp = {}; anim.forEach(function (a) { if (mio[a.Ani_IdAnimal] && a.Ean_IdEstadoAnimal === 1) { var r = rpDe(a.Ani_IdAnimal); if (r) (uDeRp[r] = uDeRp[r] || {})[a.Est_IdEstablecimiento] = 1; } });
@@ -292,7 +308,7 @@
         if (bF >= desdeHist) {
           var paB = x.pa.filter(function (p) { return p[0] >= desdeHist; }); if (!paB.length && x.pa.length) paB = [x.pa[x.pa.length - 1]];
           var dB = paB.length ? paB[0][0] : '0000', dE = function (e) { return e[0] >= dB; }, nros = paB.map(function (p) { return p[1]; });
-          hist[key] = { mv: mvBy[id] || null, pa: paB, ev: x.ev.filter(dE), ta: x.ta.filter(dE), la: x.la.filter(function (l) { return nros.indexOf(l[0]) >= 0; }), ct: x.ct.filter(dE), ab: x.ab.filter(function (f) { return f >= dB; }), ult: true, fn: fn, ma: ma, pd: pd, vit: a.Ani_ProduccionVitalicia > 0 ? Math.round(a.Ani_ProduccionVitalicia) : null };
+          hist[key] = { mv: mvBy[id] || null, pa: paB, ev: x.ev.filter(dE), ta: x.ta.filter(dE), la: x.la.filter(function (l) { return nros.indexOf(l[0]) >= 0; }), ct: x.ct.filter(dE), sa: x.sa.filter(dE), ab: x.ab.filter(function (f) { return f >= dB; }), ult: true, fn: fn, ma: ma, pd: pd, vit: a.Ani_ProduccionVitalicia > 0 ? Math.round(a.Ani_ProduccionVitalicia) : null };
         } else hist[key] = { pa: [], ev: [], ta: [], la: [], ct: [], fn: fn, ma: ma, pd: pd, vit: null, corto: true };
         return;
       }
@@ -325,7 +341,7 @@
         dLac: lp && (cat === 'vaca' || cat === 'seca') ? diffDays(ref, lp[0]) : null,
         prodLts: curLac ? curLac[1] : null, mej: mejs.length ? Math.max.apply(null, mejs) : null
       });
-      hist[rp] = { mv: mvBy[id] || null, ec: null, pa: x.pa, ev: x.ev, ta: x.ta, la: x.la, ct: x.ct, ab: x.ab, fn: fn, ma: ma, pd: pd, vit: a.Ani_ProduccionVitalicia > 0 ? Math.round(a.Ani_ProduccionVitalicia) : null };
+      hist[rp] = { mv: mvBy[id] || null, ec: null, pa: x.pa, ev: x.ev, ta: x.ta, la: x.la, ct: x.ct, sa: x.sa.length ? x.sa : null, ab: x.ab, fn: fn, ma: ma, pd: pd, vit: a.Ani_ProduccionVitalicia > 0 ? Math.round(a.Ani_ProduccionVitalicia) : null };
     });
     animales.sort(function (p, q) { return p.rp.localeCompare(q.rp, 'es', { numeric: true }); });
     bajas.sort(function (p, q) { return (q.bFecha || '') < (p.bFecha || '') ? -1 : 1; });
