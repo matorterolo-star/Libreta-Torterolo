@@ -3528,7 +3528,12 @@
         var pp = d.partoProb, dias = pp ? (A.GEST || 283) - A.diffDays(pp, t) : null, seca = a.cat === 'seca';
         var lpH = h && h.pa && h.pa.length ? h.pa[h.pa.length - 1] : null, secada = seca && lpH && lpH[5] && (!a.pFecha || lpH[5] > a.pFecha) ? lpH[5] : null;
         if (atr) { col = 'vacia'; tit = 'Parto atrasado ' + atr.d + ' días'; sub = ['Debía parir el ' + A.fmt(pp).slice(0, 5), dias + ' días de preñez', sv].filter(Boolean).join(' · '); }
-        else { col = 'prenada'; tit = (dias != null ? dias + ' días de preñez' : 'Preñada') + (seca ? ' · seca' : ''); sub = [sv, tacto].filter(Boolean).join(' · '); grid = casi([['Servicio', servF], ['Toro', toroF], ['Tacto', a.tFecha ? A.fmt(a.tFecha).slice(0, 5) : '']]); }
+        else { col = 'prenada'; tit = (dias != null ? dias + ' días de preñez' : 'Preñada') + (seca ? ' · seca' : ''); sub = [sv, tacto].filter(Boolean).join(' · '); 
+          // el servicio que la preñó (concepción = parto probable − gestación), no el último: puede haber servicios después del tacto
+          var concF = pp ? A.addDays(pp, -(A.GEST || 283)) : null, lpF = a.pFecha || '0000';
+          var svL = h && h.ev ? h.ev.filter(function (e) { return e[1] === 'S' && e[0] > lpF; }) : [], eC = concF ? svL.filter(function (e) { return e[0] === concF; }).pop() : null;
+          if (eC) { var nC = svL.filter(function (e) { return e[0] <= concF; }).length; servF = A.fmt(concF).slice(0, 5) + ' · ' + nC + '.º'; toroF = eC[2] && !/^celo/i.test(eC[2]) && eC[2] !== '???..' ? esc(eC[2]) : ''; }
+          grid = casi([['Servicio', servF], ['Toro', toroF], ['Tacto', a.tFecha ? A.fmt(a.tFecha).slice(0, 5) : '']]); }
         if (pp && dias != null && dias >= 0) {
           var conSeca = a.cat === 'vaca' || a.cat === 'seca' || !a.cat;
           var fSeca = secada || (conSeca && d.secado) || null;
