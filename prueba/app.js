@@ -3080,11 +3080,12 @@
       'Gestión': ['', '<rect x="3" y="8" width="22" height="13" rx="2"/><circle cx="14" cy="14.5" r="3"/><path d="M7 11.5v.01M21 17.5v.01"/>'],
       'Sanidad': ['', '<path d="M19.5 3.5l5 5M22 6l-3 3M18 7.5l2.5 2.5-10 10-4-4zM8.5 19.5L4 24M12 13.5l1.5 1.5M14.5 11l1.5 1.5"/>'],
       'Evolución': ['', '<path d="M4 4v20h20M7.5 19l5-5.5 4 3 6.5-8M19.5 8.5H23V12"/>'],
+      'Control': ['', '<path d="M4 4v20h20"/><circle cx="9" cy="17" r="1.6"/><circle cx="13" cy="11" r="1.6"/><circle cx="17" cy="13" r="1.6"/><circle cx="21" cy="17" r="1.6"/><circle cx="12" cy="18" r="1.6"/>'],
       'Mastitis': ['', '<path d="M14 3.5s-7.5 8.6-7.5 14a7.5 7.5 0 0 0 15 0c0-5.4-7.5-14-7.5-14z"/><path d="M14 13v8M10 17h8"/>'],
       'Las vacas': ['', '<path d="M6 10h16l-2 14H8zM6 10c0-3 3.5-5 8-5s8 2 8 5M14 13.5s-2.5 3-2.5 4.6a2.5 2.5 0 0 0 5 0c0-1.6-2.5-4.6-2.5-4.6z"/>'] };
     var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días, tactos y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición',
       'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
-      'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron', 'Mastitis': 'Casos, metas y días en leche' };
+      'Control': 'Último control y leche por días en leche', 'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron', 'Mastitis': 'Casos, metas y días en leche' };
     // G: [título, html, crudo] (crudo = el html ya trae su propio título)
     function mosaicoHTML(tab, G) {
       G = G.filter(function (g) { return g[1]; }); state.msec = state.msec || {};
@@ -4125,6 +4126,53 @@
         (T.desdeLib && (DB.origen || 'syscaw') === 'syscaw' ? ' <b>Para el histórico completo, volvé a cargar el respaldo de SysCaw</b>: ahora solo están los controles de la lactancia actual y la anterior de cada vaca.' : T.desdeLib ? ' Con esta base solo están los controles de la lactancia actual y la anterior de cada vaca.' : '') + '</p>';
       return h + '</section>';
     }
+    /* leche por días en leche (último control): un punto por vaca, del color de su estado reproductivo de hoy.
+       Tocar un punto lo marca y muestra abajo la vaca con "Ver ficha" (con tantos puntos juntos, abrir la ficha directo lleva a errores) */
+    var CTL_EST = [['prenada', 'Preñada'], ['servida', 'Servida'], ['vacia', 'Vacía'], ['sin', 'Sin servicio']];
+    function ctlEst(a) { return a.estado === 'prenada' || a.estado === 'servida' || a.estado === 'vacia' ? a.estado : 'sin'; }
+    function ctlGrafHTML(V) {
+      if (!V || V.length < 5 || V.some(function (v) { return v.del == null; })) return '';
+      var W = 340, H = 240, L = 34, R = 10, T = 24, B = 32;
+      var xm = Math.max(400, Math.ceil(Math.max.apply(null, V.map(function (v) { return v.del; })) / 100) * 100);
+      var ym = Math.max(30, Math.ceil(Math.max.apply(null, V.map(function (v) { return v.lt; })) / 10) * 10);
+      var X = function (d) { return (L + (W - L - R) * Math.max(0, d) / xm).toFixed(1); }, Y = function (l) { return (T + (H - T - B) * (1 - l / ym)).toFixed(1); };
+      var col = { prenada: 'var(--prenada)', servida: 'var(--servida)', vacia: 'var(--vacia)', sin: '#9AA1AD' };
+      var g = '', l, d;
+      for (l = 0; l <= ym; l += 10) g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(l) + '" y2="' + Y(l) + '" stroke="var(--line)" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (+Y(l) + 4) + '" text-anchor="end">' + l + '</text>';
+      for (d = 0; d <= xm; d += 100) g += '<text x="' + X(d) + '" y="' + (H - 14) + '" text-anchor="middle">' + d + '</text>';
+      g += '<text x="' + (L - 6) + '" y="12" text-anchor="end" dx="22">litros</text><text x="' + (W - R) + '" y="' + (H - 1) + '" text-anchor="end">días en leche</text>';
+      var cuenta = {}, pts = V.slice().sort(function (x, y) { return y.del - x.del; }).map(function (v) {
+        var e = ctlEst(v.a); cuenta[e] = (cuenta[e] || 0) + 1;
+        return '<g class="ctlpt" data-ctlpt="' + esc(v.a.rp) + '" data-i="' + esc(nf(v.lt, 1) + ' L · ' + v.del + ' días · ' + (v.n === 1 ? '1ª' : v.n + 'ª') + ' lactancia') + '"><circle class="pt" cx="' + X(v.del) + '" cy="' + Y(v.lt) + '" r="4.3" fill="' + col[e] + '" fill-opacity=".85" stroke="var(--surface)" stroke-width=".8"/></g>';
+      }).join('');
+      var leg = CTL_EST.filter(function (x) { return cuenta[x[0]]; }).map(function (x) { return '<span><i style="background:' + col[x[0]] + '"></i>' + x[1] + ' <small>' + cuenta[x[0]] + '</small></span>'; }).join('');
+      return '<section class="card fijo ctlgraf"><h2>Leche por días en leche</h2><div class="ctlleg">' + leg + '</div>' +
+        '<svg class="ctlsvg" data-ctlsvg="1" viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Litros de cada vaca en el último control según sus días en leche">' + g + pts + '<circle class="ctlmark" r="9" cx="-20" cy="-20"/></svg>' +
+        '<p class="cap" style="margin-top:6px">Cada punto es una vaca, con el color de su estado de hoy. Tocá un punto para ver la vaca.</p><div class="ctlsel" hidden></div>' +
+        '<style>.ctlleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:2px 0 8px;font-size:13px;color:var(--muted)}.ctlleg span{display:inline-flex;align-items:center;gap:6px}.ctlleg i{width:10px;height:10px;border-radius:50%;display:inline-block}.ctlleg small{font-size:12px;opacity:.8}' +
+        '.ctlsvg{display:block;font-size:11px;fill:var(--muted);touch-action:manipulation}.ctlsvg{cursor:pointer;-webkit-tap-highlight-color:transparent}.ctlmark{fill:none;stroke:#2EC4B6;stroke-width:2.5;pointer-events:none}' +
+        '.ctlsel{margin-top:12px}.ctlsel .row{border:1px solid #2EC4B6;border-radius:14px}</style></section>';
+    }
+    // el toque elige la vaca más cercana (hasta ~9 mm): con puntos encimados, la de arriba no siempre es la que se quiso tocar
+    function ctlToque(svg, e) {
+      var ctm = svg.getScreenCTM(); if (!ctm) return;
+      var pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; pt = pt.matrixTransform(ctm.inverse());
+      var esc_ = 340 / (svg.getBoundingClientRect().width || 340), lim = 34 * esc_, mejor = null, md = lim * lim;
+      Array.prototype.forEach.call(svg.querySelectorAll('[data-ctlpt]'), function (g) {
+        var c = g.querySelector('.pt'), dx = c.cx.baseVal.value - pt.x, dy = c.cy.baseVal.value - pt.y, d = dx * dx + dy * dy;
+        if (d < md) { md = d; mejor = g; }
+      });
+      if (mejor) ctlSel(mejor);
+    }
+    function ctlSel(el) {
+      var card = el.closest('.ctlgraf'); if (!card) return;
+      var c = el.querySelector('.pt'), m = card.querySelector('.ctlmark'), box = card.querySelector('.ctlsel');
+      m.setAttribute('cx', c.getAttribute('cx')); m.setAttribute('cy', c.getAttribute('cy'));
+      var rp = el.getAttribute('data-ctlpt'), a = null; DB.animales.forEach(function (x) { if (x.rp === rp) a = x; });
+      if (!a) return;
+      box.innerHTML = rowHTML(a, { right: '<span class="when ok" style="color:var(--link)">Ver ficha ›</span>', sub: esc(el.getAttribute('data-i')) + ' · ' + esc(labelOf(a)) });
+      box.hidden = false;
+    }
     function lecheHTML() {
       var C = controlLechero(), V = C.V;
       if (!V.length) { var ev0 = evolHTML() + curvasHTML(); return '<h1 class="ptitle">Leche</h1>' + (evolHTML() ? '<p class="grp">Evolución</p><div class="glist">' + ev0 + '</div>' : curvasHTML() + '<section class="card"><p class="hint" style="margin:0">Este respaldo no trae controles lecheros.</p></section>'); }
@@ -4166,7 +4214,7 @@
             sub: (i + 1) + 'º · ' + (pv != null ? 'antes ' + nf(pv, 1) + ' L (' + (d >= 0 ? '+' : '−') + nf(Math.abs(d), 1) + ')' : 'sin control anterior') + ' · ' + v.del + ' días en leche · ' + (v.n === 1 ? '1ª lactancia' : v.n + 'ª lactancia') });
         }).join('') + '</section>';
       var grp = function (t, html) { return html ? '<p class="grp">' + t + '</p><div class="glist">' + html + '</div>' : ''; };
-      return '<h1 class="ptitle">Leche</h1>' + res + mosaicoHTML('leche', [['Evolución', evolHTML() + curvasHTML()], ['Las vacas', porLote + top5 + caida + tabla], ['Mastitis', mastitisHTML(), true]]);
+      return '<h1 class="ptitle">Leche</h1>' + mosaicoHTML('leche', [['Control', res + ctlGrafHTML(V)], ['Evolución', evolHTML() + curvasHTML()], ['Las vacas', porLote + top5 + caida + tabla], ['Mastitis', mastitisHTML(), true]]);
     }
 
     /* ----- activación por tambo: links firmados por el Dr. Mauro Torterolo ----- */
@@ -5987,6 +6035,8 @@
       var tb = e.target.closest('[data-tambo]');
       if (tb) { elegirTambo(tb.dataset.tambo); return; }
       if ((tb = e.target.closest('[data-tdel]'))) { quitarTambo(tb.dataset.tdel); return; }
+      var cpt = e.target.closest('[data-ctlsvg]');
+      if (cpt) { ctlToque(cpt, e); return; }
       var row = e.target.closest('[data-rp]');
       if (row) { openFicha(row.getAttribute('data-rp')); return; }
       var el;
