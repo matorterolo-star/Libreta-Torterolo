@@ -931,6 +931,7 @@
           aplicarUnidad();
           busy(false);
           if (state.lnkPend) { var tl = tamboAct(); if (tl) { tl.lnkIn = state.lnkPend; saveTambos(); } state.lnkPend = null; }
+          if (state.archPend) { var ta = tamboAct(); if (ta) { ta.arch = state.archPend; saveTambos(); } state.archPend = null; }
           saveDB(); state.q = ''; state.rp = null; state.error = ''; state.filtro = 'todas'; state.tab = 'panel'; state.cat = 'todas';
           try { location.hash = ''; } catch (e) {}
           render();
@@ -939,7 +940,7 @@
           toast((cambio === 'nuevo' ? 'Tambo nuevo: ' : cambio === 'actualizado' ? 'Actualizado: ' : '') + (PERFIL.nombre ? PERFIL.nombre + ' · ' : '') + DB.animales.length + ' animales' + (r.n.bajas ? ' · se ' + (r.n.bajas === 1 ? 'conserva 1 baja' : 'conservan ' + r.n.bajas + ' bajas') + ' de respaldos anteriores' : ''));
         }).catch(function (e) {
           busy(false);
-          state.destino = null; state.lnkPend = null;
+          state.destino = null; state.lnkPend = null; state.archPend = null;
           if (e && e.cancelado) { toast('Carga cancelada. La libreta anterior sigue igual.'); return; }
           state.error = 'No pude leer el respaldo: ' + (e && e.message || e); render();
         });
@@ -1047,6 +1048,7 @@
       if (!f) return;
       var fr = new FileReader();
       fr.onload = function () {
+        if (esArchTambo(fr.result)) { leerArchTambo(fr.result); return; } // archivo del tambo que manda el veterinario
         if (esFirebird(fr.result)) {
           // base de SIGEA (Macoel): solo en el modo veterinario; fuera de él se responde como cualquier archivo que la app no lee
           if (!esVet()) { state.destino = null; state.error = 'No pude leer el archivo. Elegí el respaldo de SysCaw (.rar).'; render(); return; }
@@ -1092,13 +1094,14 @@
       $('label[for="inNombre"]').hidden = fijo;
       paintLogoPreview();
       $('#btnAct').hidden = !(esVet() && DB.idProd && DB.idProd.length && !externo(DB.origen));
-      $('#btnLnk').hidden = !(esVet() && (soloLink(DB.origen) || (DB.idProd && DB.idProd.length && !externo(DB.origen)))); // FOSAPP, DHM y DelPro: solo por link
+      $('#btnLnk').hidden = !(esVet() && (soloLink(DB.origen) || (DB.idProd && DB.idProd.length && !externo(DB.origen))));
+      $('#btnArch').hidden = $('#btnLnk').hidden; // el mismo tambo que va por link puede ir por archivo // FOSAPP, DHM y DelPro: solo por link
       $('#btnGh').hidden = !esVet(); $('#btnGh').textContent = ghToken() ? 'Permiso de GitHub para links: cargado (cambiar)' : 'Cargar permiso de GitHub para links';
       $('#btnInf').hidden = !(esVet() && DB.hist && DB.animales.length);
       // productor con un tambo de FOSAPP que le llegó por link: no carga archivos ni códigos; los datos le llegan por el link
       var porLink = !esVet() && tamboAct() && tamboAct().lnkIn;
       $('#btnLnkBuscar').hidden = !porLink;
-      $('#btnCambiar').hidden = !esVet() && (DB.origen === 'dhm' || DB.origen === 'delpro'); // DHM y DelPro: solo los carga el veterinario
+      $('#btnCambiar').hidden = !esVet() && (DB.origen === 'dhm' || DB.origen === 'delpro') && !(tamboAct() && tamboAct().arch); // DHM y DelPro: solo los carga el veterinario, salvo que le llegue por archivo // DHM y DelPro: solo los carga el veterinario
       $('#btnCambiar').textContent = DB.origen === 'fosapp' && !esVet() ? 'Actualizar este tambo (cargar la base de FOSAPP)' : 'Actualizar este tambo (cargar respaldo o libreta)';
       ['#btnPob', '#btnBase', '#btnBaseIn', '#btnVetClave'].forEach(function (s) { $(s).hidden = !esVet(); });
       $('#sheet .sheet-card').classList.toggle('vet', esVet());
@@ -4713,7 +4716,7 @@
       $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 10px">Bloquear un link corta a quien lo abrió con él: deja de ver la libreta y de recibir datos nuevos. El productor y los demás links del tambo siguen andando. Se puede desbloquear después.</p>' +
         (L.length ? L.map(function (x) {
           var b = bl.indexOf(x.l) >= 0;
-          return '<div class="lnkrow' + (b ? ' bloq' : '') + '"><span><b>' + esc(x.n || 'Tambo') + '</b><small>' + (x.para ? 'Para ' + esc(x.para) + ' · ' : '') + (x.r === 'op' ? 'Operario' : 'Productor') + ' · ' + A.fmt(x.f) + (x.h ? ' ' + x.h : '') + (b ? ' · <b>bloqueado</b>' : '') + '</small></span><button class="btn" data-a="lnkbloq" data-l="' + esc(x.l) + '">' + (b ? 'Desbloquear' : 'Bloquear') + '</button></div>';
+          return '<div class="lnkrow' + (b ? ' bloq' : '') + '"><span><b>' + esc(x.n || 'Tambo') + '</b><small>' + (x.para ? 'Para ' + esc(x.para) + ' · ' : '') + (x.k === 'arch' ? 'Archivo · ' : '') + (x.r === 'op' ? 'Operario' : 'Productor') + ' · ' + A.fmt(x.f) + (x.h ? ' ' + x.h : '') + (b ? ' · <b>bloqueado</b>' : '') + '</small></span><button class="btn" data-a="lnkbloq" data-l="' + esc(x.l) + '">' + (b ? 'Desbloquear' : 'Bloquear') + '</button></div>';
         }).join('') : '<p class="hint">Todavía no hay links registrados en este teléfono (se registran desde esta versión).</p>') +
         '<button class="lnk" data-a="lnkpegbloq" style="display:block;margin:12px 0 0">Bloquear un link que no está en la lista (pegarlo)</button>' +
         '<style>.lnkrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.lnkrow span{display:flex;flex-direction:column;min-width:0}.lnkrow small{color:var(--muted)}.lnkrow.bloq b{color:var(--vacia)}.lnkrow .btn{min-height:40px;padding:6px 12px}</style>';
@@ -4772,6 +4775,87 @@
       $('#xbtns').innerHTML = (navigator.share ? '<button class="btn primary big" data-a="lnkshare">Compartir (WhatsApp, mail…)</button>' : '') +
         '<button class="btn' + (navigator.share ? '' : ' primary big') + '" data-a="lnkwa">Mandar por WhatsApp</button><button class="btn" data-a="lnkcopy">Copiar el link</button><button class="btn" data-a="xcancel">Cerrar</button>';
       $('#sheetX').hidden = false;
+    }
+    /* ===== archivo del tambo (sin GitHub) =====
+       El veterinario arma un archivo de texto con el tambo (comprimido) y una activación firmada que incluye la huella
+       SHA-256 de los datos, y lo manda por WhatsApp. Nada se sube al sitio. Quien lo carga queda activado (productor u
+       operario) con el mismo sistema de bloqueo que los links; para datos nuevos se le manda otro archivo, que actualiza
+       el mismo tambo (se reconoce por su id). Formato: línea 1 ARCH_MAGIA, línea 2 la activación firmada, línea 3 los datos en base64. */
+    var ARCH_MAGIA = 'LIBRETA-TAMBO-1';
+    function archMeta(id) { try { return JSON.parse(localStorage.getItem('libreta:arch:' + id) || 'null'); } catch (e) { return null; } }
+    function hexAzar(n) { return Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(n)), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
+    function archDatos() {
+      if (externo(DB.origen) && !soloLink(DB.origen)) { toast('Los tambos de ' + SRC() + ' son solo para el modo veterinario.'); return; }
+      if (!soloLink(DB.origen) && (!DB.idProd || !DB.idProd.length)) { toast('Cargá el respaldo de SysCaw de este tambo para mandar el archivo.'); return; }
+      if (!root.CompressionStream || !crypto.subtle) { toast('Este navegador no puede armar el archivo. Usá Chrome.'); return; }
+      closeSheet();
+      $('#sheetXTitle').textContent = 'Archivo del tambo';
+      $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 10px">' + esc(PERFIL.nombre || 'Este tambo') + ': se arma un archivo con los datos de hoy para mandar por WhatsApp. No se sube nada a GitHub. Para darle datos nuevos, mandale otro archivo: se actualiza el mismo tambo.</p>';
+      $('#xbtns').innerHTML = '<button class="btn primary big" data-a="archprod">Archivo para productor · app completa</button><button class="btn big" data-a="archop">Archivo para operario · solo buscar y ficha</button><button class="btn" data-a="lnklista">Mandados · bloquear uno</button><button class="btn" data-a="xcancel">Cancelar</button>';
+      $('#sheetX').hidden = false;
+    }
+    function archDatosRol(rol) {
+      $('#sheetX').hidden = true;
+      var para = (prompt('¿Para quién es este archivo? (opcional: sirve para reconocerlo si un día hay que bloquearlo)', '') || '').trim().slice(0, 60);
+      var meta = archMeta(TAMBOS.activo); if (!meta) { meta = { id: hexAzar(8) }; try { localStorage.setItem('libreta:arch:' + TAMBOS.activo, JSON.stringify(meta)); } catch (e) {} }
+      var nombre = PERFIL.nombre || 'tu tambo', subido = new Date().toISOString();
+      busy(true, 'Armando el archivo…');
+      var gz;
+      paqueteTambo(meta).then(function (d) {
+        return new Response(new Blob([JSON.stringify({ v: 1, subido: subido, d: d })]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+      }).then(function (b) { gz = new Uint8Array(b); return crypto.subtle.digest('SHA-256', gz); }).then(function (h) {
+        var pl = { p: idsLink(meta), n: nombre, f: today(), a: meta.id, s: subido, h: b64u(new Uint8Array(h)) }; if (rol === 'op') pl.r = 'op';
+        return firmar(pl);
+      }).then(function (tok) {
+        busy(false);
+        linksMandados(function (L) { var hh = new Date(); L.unshift({ l: linkId(tok), n: nombre, r: rol === 'op' ? 'op' : 'prod', f: today(), h: pad2(hh.getHours()) + ':' + pad2(hh.getMinutes()), para: para, k: 'arch' }); });
+        var f = today(), nomArch = 'Libreta ' + limpiarArchivo(nombre) + (rol === 'op' ? ' (operario)' : '') + ' ' + f.slice(8, 10) + '-' + f.slice(5, 7) + '-' + f.slice(0, 4) + '.txt';
+        state.archFile = new File([ARCH_MAGIA + '\n' + tok + '\n' + b64std(gz) + '\n'], nomArch, { type: 'text/plain' });
+        state.archTxt = 'Libreta de vacas de ' + nombre + (rol === 'op' ? ' (operario)' : '') + '. Guardá este archivo, abrí la libreta → Ajustes → "Actualizar este tambo" y elegilo.\n\nDr. Mauro Torterolo';
+        var kb = Math.round(state.archFile.size / 1024);
+        $('#sheetXTitle').textContent = 'Archivo listo · ' + (rol === 'op' ? 'operario' : 'productor');
+        $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 8px"><b>' + esc(nomArch) + '</b> · ' + (kb >= 1024 ? (kb / 1024).toFixed(1).replace('.', ',') + ' MB' : kb + ' KB') + '</p><p class="hint" style="margin:0">Mandalo por WhatsApp. En iPhone, el productor lo guarda con "Guardar en Archivos"; en Android queda en Descargas. Después: Ajustes → "Actualizar este tambo" y lo elige.</p>';
+        var puede = false; try { puede = !!(navigator.canShare && navigator.canShare({ files: [state.archFile] })); } catch (e) {}
+        $('#xbtns').innerHTML = (puede ? '<button class="btn primary big" data-a="archshare">Compartir (WhatsApp, mail…)</button>' : '') + '<button class="btn' + (puede ? '' : ' primary big') + '" data-a="archbajar">Descargar el archivo</button><button class="btn" data-a="xcancel">Cerrar</button>';
+        $('#sheetX').hidden = false;
+      }).catch(function (e) { busy(false); toast('No pude armar el archivo: ' + (e && e.message || e)); });
+    }
+    function limpiarArchivo(t) { return String(t || 'tambo').replace(/[\\/:*?"<>|#]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40) || 'tambo'; }
+    function archBajar() {
+      var f = state.archFile; if (!f) return;
+      var u = URL.createObjectURL(f), a = document.createElement('a'); a.href = u; a.download = f.name; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 4000);
+      toast('Descargado: mandalo por WhatsApp desde Descargas.');
+    }
+    function esArchTambo(buf) { if (!buf || buf.byteLength < 20) return false; return new TextDecoder().decode(new Uint8Array(buf, 0, ARCH_MAGIA.length)) === ARCH_MAGIA; }
+    function leerArchTambo(buf) {
+      if (!root.crypto || !crypto.subtle || !root.DecompressionStream) { state.destino = null; state.error = 'Este teléfono no puede abrir el archivo. Probá con Chrome o actualizá el teléfono.'; render(); return; }
+      var L = new TextDecoder().decode(buf).split(/\r?\n/), tok = (L[1] || '').trim(), gz;
+      busy(true, 'Abriendo el archivo…');
+      verificar(tok).then(function (pl) {
+        if (!pl || !pl.p || !pl.a || !pl.h) throw new Error('El archivo no es válido.');
+        try { gz = Uint8Array.from(atob((L[2] || '').replace(/\s/g, '')), function (c) { return c.charCodeAt(0); }); } catch (e) { throw new Error('El archivo está incompleto. Pedile uno nuevo al Dr. Mauro Torterolo.'); }
+        return crypto.subtle.digest('SHA-256', gz).then(function (h) {
+          if (b64u(new Uint8Array(h)) !== pl.h) throw new Error('El archivo fue modificado o está incompleto. Pedile uno nuevo al Dr. Mauro Torterolo.');
+          return pl;
+        });
+      }).then(function (pl) {
+        if (!esVet()) {
+          pl.lid = linkId(tok); if (BLOQL.indexOf(pl.lid) >= 0) throw new Error('Este archivo fue dado de baja. Pedile uno nuevo al Dr. Mauro Torterolo.');
+          ACT = ACT.filter(function (x) { return JSON.stringify(x.p) !== JSON.stringify(pl.p); }).concat([pl]); try { localStorage.setItem('libreta:act', JSON.stringify(ACT)); } catch (e) {}
+        }
+        return new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text().then(function (t) {
+          var o = JSON.parse(t), d = o.d; d.unidades = d.unidades || []; d.sel = null; d.unidadesSel = [];
+          return listo.then(function () {
+            var ya = null; TAMBOS.lista.forEach(function (t) { if (t.arch && t.arch.id === pl.a) ya = t; });
+            if (ya && ya.arch.subido && (o.subido || '') < ya.arch.subido) { busy(false); toast('Este archivo es más viejo que los datos que ya tenés (del ' + A.fmt(ya.arch.subido.slice(0, 10)) + ').'); state.destino = null; return; }
+            if (ya) { TAMBOS.activo = ya.id; state.destino = null; } else state.destino = 'nuevo';
+            state.inicio = false;
+            state.archPend = { id: pl.a, subido: o.subido || '' };
+            cargarRespaldo(Promise.resolve(d), { name: 'archivo' }, 'pre');
+          });
+        });
+      }).catch(function (e) { busy(false); state.destino = null; state.error = 'No pude abrir el archivo: ' + (e && e.message || e); render(); });
     }
     // bajar y descifrar los datos de un link
     function bajarLibreta(id, k) {
@@ -5978,6 +6062,11 @@
       else if (a === 'finzafdef') { try { localStorage.removeItem('libreta:finzaf:' + TAMBOS.activo); if (TAMBOS.lista.length < 2) localStorage.removeItem('libreta:finzaf'); } catch (e) {} render(); }
       else if (a === 'enviaract') enviarActivacion();
       else if (a === 'lnkdatos') linkDatos();
+      else if (a === 'archdatos') archDatos();
+      else if (a === 'archprod') archDatosRol('prod');
+      else if (a === 'archop') archDatosRol('op');
+      else if (a === 'archbajar') archBajar();
+      else if (a === 'archshare') { navigator.share({ files: [state.archFile], text: state.archTxt }).catch(function (e) { if (!e || e.name !== 'AbortError') archBajar(); }); }
       else if (a === 'lnkprod') linkDatosRol('prod');
       else if (a === 'lnkop') linkDatosRol('op');
       else if (a === 'lnkact') linkDatosRol('act');
