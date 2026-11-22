@@ -3425,7 +3425,12 @@
         if (s.parto) {
           title = 'Lactancia ' + s.parto[1];
           sub.push('Parto ' + A.fmt(s.parto[0]));
-        } else { title = 'Vaquillona'; }
+        } else {
+          // eventos anteriores al primer parto que trae el respaldo: si ese parto no es el 1.º, no es la vaquillona sino la lactancia anterior,
+          // cuyo parto el programa no mandó (DHM y otros guardan solo los últimos partos)
+          var p1 = R.segs.filter(function (z) { return z.parto; })[0], n1 = p1 ? +p1.parto[1] : 0;
+          if (n1 > 1) { title = 'Lactancia ' + (n1 - 1); sub.push('parto sin dato'); } else title = 'Vaquillona';
+        }
         if (s.conc) sub.push(s.nServ + ' serv. a preñez');
         else if (s.nServTot) sub.push(s.nServTot + ' serv.');
         var li = [];
