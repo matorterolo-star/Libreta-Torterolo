@@ -114,8 +114,9 @@
     var claveToro = function (s) { return tx(s).toUpperCase().replace(/[^A-Z0-9ÑÁÉÍÓÚÜ]/g, ''); };
     var servs = T('DHM_Servicios', ['Ser_IdServicio', 'Ani_IdAnimal', 'Ser_Fecha', 'Ser_IdToro', 'Ser_HBAToro', 'Ser_ApodoToro', 'Ser_IdInseminador', 'Tse_IdTipoServicio', 'Est_IdEstablecimiento']);
     var nomToro = function (s) {
-      var t = tx(s.Ser_ApodoToro), b = A[s.Ser_IdToro];
-      if (!t || t === '0') t = b ? tx(b.Ani_Apodo) || tx(b.Ani_Nombre) || tx(b.Ani_RP) : '';
+      var t = tx(s.Ser_ApodoToro), b = A[s.Ser_IdToro], bn = b ? tx(b.Ani_Apodo) || tx(b.Ani_Nombre) || tx(b.Ani_RP) : '';
+      // el servicio a veces trae solo el número del toro ("16956") y la ficha del toro el nombre completo ("16956 SUNSEEKER"): manda la ficha
+      if (bn && bn !== '0' && (!t || t === '0' || /^\d+$/.test(t) || claveToro(bn).indexOf(claveToro(t)) >= 0)) t = bn;
       if (!t || t === '0') t = tx(s.Ser_HBAToro) !== '0' ? tx(s.Ser_HBAToro) : '';
       if (!t && s.Tse_IdTipoServicio === 2) t = 'Toro (campo)';
       return t;
