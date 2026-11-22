@@ -4145,17 +4145,24 @@
       var w = V.filter(function (x) { return ctlGrupo(x) === ctlGrupo(v) && Math.abs(x.del - v.del) <= 30; }).map(function (x) { return x.lt; }).sort(function (a, b) { return a - b; });
       return w.length >= 8 ? w[Math.floor(w.length / 2)] : null;
     }
-    function ctlGrafHTML(V) {
-      if (!V || V.length < 10 || V.some(function (v) { return v.del == null; })) return '';
-      var R = ctlTramos(V); if (R[1].length + R[2].length < 2) return '';
+    // límite de días en leche para la curva y la lista (se guarda por tambo): las pocas vacas con muchos días no estiran el gráfico
+    var CTL_MAXS = [100, 200, 305, 0];
+    function ctlMax() { var m = +(getP('ctlmax') || 305); return CTL_MAXS.indexOf(m) >= 0 ? m : 305; }
+    function ctlGrafHTML(V0) {
+      if (!V0 || V0.length < 10 || V0.some(function (v) { return v.del == null; })) return '';
+      var MX = ctlMax(), V = MX ? V0.filter(function (v) { return v.del <= MX; }) : V0, fuera = V0.length - V.length;
+      var chips = '<div class="secsel" aria-label="Días en leche"><span>Hasta</span>' + CTL_MAXS.map(function (n) { return '<button class="fchip plain" data-ctlmax="' + n + '" aria-pressed="' + (MX === n) + '">' + (n || 'Todos') + '</button>'; }).join('') + '</div>';
+      if (V.length < 10) return '<section class="card fijo ctlgraf"><h2>Curva del tambo</h2>' + chips + '<p class="hint" style="margin:0">Hay menos de 10 vacas hasta ' + MX + ' días en leche.</p></section>';
+      var R = ctlTramos(V); if (R[1].length + R[2].length < 2) return '<section class="card fijo ctlgraf"><h2>Curva del tambo</h2>' + chips + '<p class="hint" style="margin:0">No hay tramos con 5 vacas o más.</p></section>';
       var W = 340, H = 240, L = 34, R_ = 10, T = 24, B = 32;
       var ult = Math.max.apply(null, R[1].concat(R[2]).map(function (t) { return t.d0 + CTL_PASO; }));
-      var xm = Math.max(300, Math.ceil(ult / 100) * 100), ym = Math.max(30, Math.ceil((Math.max.apply(null, R[1].concat(R[2]).map(function (t) { return t.lt; })) + 3) / 10) * 10);
+      var xm = MX || Math.max(300, Math.ceil(ult / 100) * 100);
+      var ym = Math.max(30, Math.ceil((Math.max.apply(null, R[1].concat(R[2]).map(function (t) { return t.lt; })) + 3) / 10) * 10);
       var X = function (d) { return (L + (W - L - R_) * d / xm).toFixed(1); }, Y = function (l) { return (T + (H - T - B) * (1 - l / ym)).toFixed(1); };
       var g = '<rect x="' + X(20) + '" y="' + T + '" width="' + (X(60) - X(20)).toFixed(1) + '" height="' + (H - T - B) + '" fill="#2EC4B6" fill-opacity=".12"/>' +
         '<text x="' + ((+X(20) + +X(60)) / 2).toFixed(1) + '" y="' + (H - B - 6) + '" text-anchor="middle" fill="#13877C" font-weight="700">20–60</text>', l, d;
       for (l = 0; l <= ym; l += 10) g += '<line x1="' + L + '" x2="' + (W - R_) + '" y1="' + Y(l) + '" y2="' + Y(l) + '" stroke="var(--line)" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (+Y(l) + 4) + '" text-anchor="end">' + l + '</text>';
-      for (d = 0; d <= xm; d += 100) g += '<text x="' + X(d) + '" y="' + (H - 14) + '" text-anchor="middle">' + d + '</text>';
+      for (d = 0; d <= xm; d += (xm <= 200 ? 50 : 100)) g += '<text x="' + X(d) + '" y="' + (H - 14) + '" text-anchor="middle">' + d + '</text>';
       g += '<text x="' + (L - 6) + '" y="12" text-anchor="end" dx="22">litros</text><text x="' + (W - R_) + '" y="' + (H - 1) + '" text-anchor="end">días en leche</text>';
       var COL = { 1: '#C9A227', 2: '#12274A' };
       [1, 2].forEach(function (gr) {
@@ -4168,16 +4175,16 @@
         R[gr].forEach(function (t) { g += '<circle class="pt" data-ctlb="' + gr + '|' + t.d0 + '" cx="' + X(t.d0 + CTL_PASO / 2) + '" cy="' + Y(t.lt) + '" r="3.6" fill="' + COL[gr] + '"/>'; });
       });
       var leg = (R[1].length ? '<span><i style="background:' + COL[1] + '"></i>Primíparas</span>' : '') + (R[2].length ? '<span><i style="background:' + COL[2] + '"></i>Multíparas</span>' : '');
-      var curva = '<section class="card fijo ctlgraf"><h2>Curva del tambo</h2><div class="ctlleg">' + leg + '</div>' +
+      var curva = '<section class="card fijo ctlgraf"><h2>Curva del tambo</h2><div class="ctlleg">' + leg + '</div>' + chips +
         '<svg class="ctlsvg" data-ctlsvg="1" viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Promedio de litros cada 30 días en leche, primíparas y multíparas">' + g + '<circle class="ctlmark" r="9" cx="-20" cy="-20"/></svg>' +
-        '<p class="cap" style="margin-top:6px">Promedio de litros cada 30 días en leche, en el último control. Tocá un punto para ver esas vacas.</p></section><div class="ctlsel"></div>';
+        '<p class="cap" style="margin-top:6px">Promedio de litros cada 30 días en leche, en el último control. Tocá un punto para ver esas vacas.' + (fuera ? ' Quedan afuera ' + nf(fuera) + (fuera === 1 ? ' vaca' : ' vacas') + ' con más de ' + MX + ' días.' : '') + '</p></section><div class="ctlsel"></div>';
       // por debajo de lo esperado
       var bajo = [];
       V.forEach(function (v) { var e = ctlEsperado(V, v); if (e && v.lt < e * 0.75) bajo.push({ v: v, e: e, f: 1 - v.lt / e }); });
       bajo.sort(function (a, b) { return b.f - a.f; });
       var fila = function (x) { return rowHTML(x.v.a, { right: '<span class="when late">' + nf(x.v.lt, 1) + ' L</span>', sub: esc(x.v.del + ' días · ' + (x.v.n === 1 ? '1ª' : x.v.n + 'ª') + ' lactancia · esperado ' + nf(x.e, 0) + ' L') }); };
       var lista = '<section class="card fijo"><h2>Por debajo de lo esperado · ' + nf(bajo.length) + (bajo.length === 1 ? ' vaca' : ' vacas') + '</h2>' +
-        '<p class="cap" style="margin:0 0 8px">Dan 25% o más menos que lo que dan las de su mismo grupo (primíparas o multíparas) con días en leche parecidos. De la que más le falta a la que menos.</p>' +
+        '<p class="cap" style="margin:0 0 8px">Dan 25% o más menos que lo que dan las de su mismo grupo (primíparas o multíparas) con días en leche parecidos (30 días antes o después)' + (MX ? ', hasta ' + MX + ' días en leche' : '') + '. Ordenadas por cuánto les falta en %: primero la que está más lejos de lo esperado.</p>' +
         (bajo.length ? bajo.slice(0, 10).map(fila).join('') + (bajo.length > 10 ? '<div class="ctlmas" hidden>' + bajo.slice(10).map(fila).join('') + '</div><button class="lnk" data-ctlmas="1" style="display:block;margin:10px 0 0">Ver las ' + nf(bajo.length) + '</button>' : '') : '<p class="hint">Ninguna vaca está tan por debajo.</p>') + '</section>';
       return curva + lista + '<style>.ctlleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:2px 0 8px;font-size:13px;color:var(--muted)}.ctlleg span{display:inline-flex;align-items:center;gap:6px}.ctlleg i{width:14px;height:3px;border-radius:2px;display:inline-block}' +
         '.ctlsvg{display:block;font-size:11px;fill:var(--muted);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}.ctlmark{fill:none;stroke:#2EC4B6;stroke-width:2.5;pointer-events:none}.ctlsel>.card{border-color:#2EC4B6}</style>';
@@ -6066,6 +6073,7 @@
       if ((tb = e.target.closest('[data-tdel]'))) { quitarTambo(tb.dataset.tdel); return; }
       var cpt = e.target.closest('[data-ctlsvg]');
       if (cpt) { ctlToque(cpt, e); return; }
+      if ((cpt = e.target.closest('[data-ctlmax]'))) { setP('ctlmax', cpt.dataset.ctlmax); render(); return; }
       if ((cpt = e.target.closest('[data-ctlmas]'))) { var mm = cpt.previousElementSibling; if (mm) mm.hidden = false; cpt.remove(); return; }
       var row = e.target.closest('[data-rp]');
       if (row) { openFicha(row.getAttribute('data-rp')); return; }
