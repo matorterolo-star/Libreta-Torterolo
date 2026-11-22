@@ -122,7 +122,8 @@
       return t;
     };
     servs.forEach(function (s) { var t = nomToro(s), k = claveToro(t); if (!k) return; s._k = k; var c = torF[k] || (torF[k] = {}); c[t] = (c[t] || 0) + 1; });
-    Object.keys(torF).forEach(function (k) { var c = torF[k], best = null; Object.keys(c).forEach(function (t) { if (!best || c[t] > c[best] || (c[t] === c[best] && t.length > best.length)) best = t; }); torN[k] = best; });
+    Object.keys(torF).forEach(function (k) { var c = torF[k], best = null; Object.keys(c).forEach(function (t) { if (!best || c[t] > c[best] || (c[t] === c[best] && t.length > best.length)) best = t; }); torN[k] = best.replace(/^\d+[\s.\-]*(?=[A-Za-zÑñ])/, '').trim() || best; });
+    // el número con que el programa identifica al toro va adelante del nombre ("16956 SUNSEEKER"): se saca; si el nombre es solo el número, queda
     var toroDe = function (s) { return s && s._k ? torN[s._k] : ''; };
     var sById = {}; servs.forEach(function (s) { sById[s.Ser_IdServicio] = s; });
     var pid = function (id) { return A[id] ? (A[id].Ani_Apodo || A[id].Ani_Nombre || A[id].Ani_RP) : null; };
