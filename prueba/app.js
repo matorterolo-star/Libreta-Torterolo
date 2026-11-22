@@ -3347,7 +3347,7 @@
     // informe de mastitis (nov 2026, opción B con criterios de Michigan State / Ruegg): caso a nivel de vaca (otro registro de la
     // misma vaca dentro de 14 días es el mismo caso); casos cada 100 vacas en ordeñe por año (meta < 24); repetidos en la lactancia
     // (meta < 20 %); más de un cuarto (meta < 20 %); barras por días en leche o por mes
-    var MAST_META = 24, MAST_META_PCT = 20;
+    var MAST_META = 24, MAST_ALERTA = 35, MAST_META_PCT = 20;
     function mastitisHTML() {
       if (!DB.hist) return '';
       var ref = DB.fecha || today(), desde = A.addDays(ref, -365), casos = [], vacasDias = 0, hayCuarto = false;
@@ -3379,13 +3379,14 @@
       var rep = casos.filter(function (c) { return c.rep; }).length, multi = casos.filter(function (c) { return Object.keys(c.q).filter(cuarto).length > 1; }).length;
       var conD = casos.filter(function (c) { return c.dpp != null; }), p30 = conD.filter(function (c) { return c.dpp <= 30; }).length;
       var conN = casos.filter(function (c) { return c.nro; }), pri = conN.filter(function (c) { return c.nro === 1; }).length;
-      // ámbar = cerca de la meta (desde 5/6 de la meta: 20 de 24, 17 % de 20 %): criterio propio, la meta es la de Michigan
-      var cls = function (v, meta) { return v == null ? '' : v < meta * 5 / 6 ? ' ok' : v < meta ? ' cerca' : ' mal'; };
+      // incidencia: verde hasta la meta de Michigan (24), ámbar hasta la alerta de AHDB (35), rojo arriba; los % solo tienen la meta de Michigan
+      var cls = function (v, meta) { return v == null ? '' : v < meta ? ' ok' : ' mal'; };
+      var clsInc = function (v) { return v == null ? '' : v < MAST_META ? ' ok' : v < MAST_ALERTA ? ' cerca' : ' mal'; };
       var tile = function (t, v, sub, c) { return '<div class="mk"><span>' + t + '</span><b class="' + (c || '') + '">' + v + '</b>' + (sub ? ' <small>' + sub + '</small>' : '') + '</div>'; };
       var pRep = rep / casos.length * 100, pMul = multi / casos.length * 100;
-      var big = inc != null ? '<div class="mbig"><b class="' + cls(inc, MAST_META) + '">' + nf(inc) + '</b><span>casos cada 100 vacas en ordeñe por año</span></div>' +
-        '<div class="mmeter"><i style="width:' + (MAST_META / 50 * 100) + '%"></i><em style="left:' + (MAST_META * 5 / 6 / 50 * 100) + '%;width:' + (MAST_META / 6 / 50 * 100) + '%"></em><u style="left:' + Math.min(99, inc / 50 * 100) + '%"></u></div>' +
-        '<div class="mml"><span>0</span><span style="left:' + (MAST_META / 50 * 100) + '%">' + MAST_META + ' meta</span><span>50</span></div>' : '';
+      var big = inc != null ? '<div class="mbig"><b class="' + clsInc(inc) + '">' + nf(inc) + '</b><span>casos cada 100 vacas en ordeñe por año</span></div>' +
+        '<div class="mmeter"><i style="width:' + (MAST_META / 50 * 100) + '%"></i><em style="left:' + (MAST_META / 50 * 100) + '%;width:' + ((MAST_ALERTA - MAST_META) / 50 * 100) + '%"></em><u style="left:' + Math.min(99, inc / 50 * 100) + '%"></u></div>' +
+        '<div class="mml"><span>0</span><span style="left:' + (MAST_META / 50 * 100) + '%">' + MAST_META + ' meta</span><span style="left:' + (MAST_ALERTA / 50 * 100) + '%">' + MAST_ALERTA + ' alerta</span><span>50</span></div>' : '';
       var vista = state.mastVista || 'del', barras;
       if (vista === 'del') {
         var B = [['0–30', 0, 30], ['31–60', 31, 60], ['61–100', 61, 100], ['101–200', 101, 200], ['201–300', 201, 300], ['+300', 301, 1e9]].map(function (b) { return { l: b[0], n: conD.filter(function (c) { return c.dpp >= b[1] && c.dpp <= b[2]; }).length }; });
@@ -3405,7 +3406,7 @@
         '<div class="mtg"><button data-a="mastv" data-mv="del"' + (vista === 'del' ? ' class="on"' : '') + '>Por días en leche</button><button data-a="mastv" data-mv="mes"' + (vista === 'mes' ? ' class="on"' : '') + '>Por mes</button></div>' +
         '<div class="mab">' + barras.map(function (o) { return '<div><i style="height:' + Math.round(o.n / mx * 100) + '%"></i><b>' + (o.n || '') + '</b></div>'; }).join('') + '</div>' +
         '<div class="mabl">' + barras.map(function (o) { return '<span>' + o.l + '</span>'; }).join('') + '</div>' +
-        '<p class="cap">Criterios y metas de Michigan State University (Ruegg): un caso es mastitis en uno o más cuartos de la vaca; otro registro dentro de 14 días es el mismo caso. Verde: lejos de la meta; ámbar: cerca de la meta (de 20 a 24 casos, o de 17 % a 20 %); rojo: en la meta o arriba. Un mes sin casos puede ser un mes sin registro.</p></section>';
+        '<p class="cap">Un caso es mastitis en uno o más cuartos de la vaca; otro registro dentro de 14 días es el mismo caso (Michigan State University, Ruegg). Casos cada 100 vacas en ordeñe por año: verde por debajo de la meta de Michigan (24); ámbar de 24 a 35, el nivel en que la guía inglesa AHDB pide actuar; rojo 35 o más. Repetidos y más de un cuarto: meta de Michigan, menos de 20 %. Un mes sin casos puede ser un mes sin registro.</p></section>';
     }
     function histHTML(a, h) {
       var t = today(), R = resumenHist(h), segs = R.segs.slice().reverse();
