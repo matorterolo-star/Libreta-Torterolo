@@ -1178,12 +1178,21 @@
     });
 
     /* ----- piezas comunes ----- */
+    // preñada con servicio o celo después del tacto preñada (nov 2026): "Preñada + servicio" / "Preñada + celo" con alerta;
+    // si después hay otro tacto preñada, el último tacto ya es posterior y vuelve a ser preñada (la preñez se toma del último servicio)
+    function postTacto(a) {
+      if (a.estado !== 'prenada' || !a.tFecha || !DB.hist) return null;
+      var h = DB.hist[a.rp], L = h && h.ev ? h.ev.filter(function (e) { return e[0] > a.tFecha && (e[1] === 'S' || e[1] === 'C'); }) : [];
+      return L.length ? L[L.length - 1] : (a.celo ? [null, 'C'] : null);
+    }
+    var ALR_SVG = '<svg class="alr-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3.5 2.5 20h19z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 10v4.5M12 17.2v.3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
     function labelOf(a) {
+      var pt = postTacto(a); if (pt) return pt[1] === 'S' ? 'Preñada + servicio' : 'Preñada + celo';
       if (a.cat === 'ternera' && a.estado === 'sin') return 'Ternera';
       if (a.cat === 'vaquillona' && a.estado === 'sin') return 'Sin servicio';
       return a.celo ? 'Preñada + celo' : a.estado === 'otro' ? (a.result || 'Otro') : LABEL[a.estado];
     }
-    function chip(a) { return '<span class="chip ' + a.estado + '">' + esc(labelOf(a)) + '</span>'; }
+    function chip(a) { return '<span class="chip ' + a.estado + '">' + esc(labelOf(a)) + (postTacto(a) ? ALR_SVG : '') + '</span>'; }
     function subDefault(a) {
       var d = A.derive(a, today()), sub = '';
       if (a.estado === 'prenada' && d.partoProb) sub = (d.partoEstimado ? 'Parto estimado ' : 'Parto probable ') + A.fmt(d.partoProb);
@@ -3533,7 +3542,9 @@
           var concF = pp ? A.addDays(pp, -(A.GEST || 283)) : null, lpF = a.pFecha || '0000';
           var svL = h && h.ev ? h.ev.filter(function (e) { return e[1] === 'S' && e[0] > lpF; }) : [], eC = concF ? svL.filter(function (e) { return e[0] === concF; }).pop() : null;
           if (eC) { var nC = svL.filter(function (e) { return e[0] <= concF; }).length; servF = A.fmt(concF).slice(0, 5) + ' · ' + nC + '.º'; toroF = eC[2] && !/^celo/i.test(eC[2]) && eC[2] !== '???..' ? esc(eC[2]) : ''; }
-          grid = casi([['Servicio', servF], ['Toro', toroF], ['Tacto', a.tFecha ? A.fmt(a.tFecha).slice(0, 5) : '']]); }
+          grid = casi([['Servicio', servF], ['Toro', toroF], ['Tacto', a.tFecha ? A.fmt(a.tFecha).slice(0, 5) : '']]);
+          var pt = postTacto(a);
+          if (pt) grid = '<div class="falr">' + ALR_SVG + '<span>' + (pt[1] === 'S' ? 'Servicio' : 'Celo') + (pt[0] ? ' <b>' + A.fmt(pt[0]).slice(0, 5) + '</b>' : '') + (pt[1] === 'S' && pt[2] && !/^celo/i.test(pt[2]) && pt[2] !== '???..' ? ' con <b>' + esc(pt[2]) + '</b>' : '') + '</span></div>' + grid; }
         if (pp && dias != null && dias >= 0) {
           var conSeca = a.cat === 'vaca' || a.cat === 'seca' || !a.cat;
           var fSeca = secada || (conSeca && d.secado) || null;
