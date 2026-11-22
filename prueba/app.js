@@ -4140,10 +4140,17 @@
       });
       return R;
     }
-    // lo esperado para una vaca: la mediana de su grupo (primíparas o multíparas) con ±30 días en leche; con menos de 8 vacas, no se calcula
+    // lo esperado para una vaca: la mediana de las de su misma lactancia (1ª, 2ª o 3ª y más) con ±30 días en leche.
+    // Si ahí hay menos de 8 vacas, se compara con todas las multíparas (2ª y más); con menos de 8, no se calcula
+    function ctlLac(v) { return v.n === 1 ? 1 : v.n === 2 ? 2 : 3; }
     function ctlEsperado(V, v) {
-      var w = V.filter(function (x) { return ctlGrupo(x) === ctlGrupo(v) && Math.abs(x.del - v.del) <= 30; }).map(function (x) { return x.lt; }).sort(function (a, b) { return a - b; });
-      return w.length >= 8 ? w[Math.floor(w.length / 2)] : null;
+      var med = function (f) {
+        var w = V.filter(function (x) { return f(x) && Math.abs(x.del - v.del) <= 30; }).map(function (x) { return x.lt; }).sort(function (a, b) { return a - b; });
+        return w.length >= 8 ? w[Math.floor(w.length / 2)] : null;
+      };
+      var e = med(function (x) { return ctlLac(x) === ctlLac(v); });
+      if (e == null && v.n > 1) e = med(function (x) { return x.n > 1; });
+      return e;
     }
     // límite de días en leche para la curva y la lista (se guarda por tambo): las pocas vacas con muchos días no estiran el gráfico
     var CTL_MAXS = [100, 200, 305, 0];
@@ -4184,7 +4191,7 @@
       bajo.sort(function (a, b) { return b.f - a.f; });
       var fila = function (x) { return rowHTML(x.v.a, { right: '<span class="when late">' + nf(x.v.lt, 1) + ' L</span>', sub: esc(x.v.del + ' días · ' + (x.v.n === 1 ? '1ª' : x.v.n + 'ª') + ' lactancia · esperado ' + nf(x.e, 0) + ' L') }); };
       var lista = '<section class="card fijo"><h2>Por debajo de lo esperado · ' + nf(bajo.length) + (bajo.length === 1 ? ' vaca' : ' vacas') + '</h2>' +
-        '<p class="cap" style="margin:0 0 8px">Dan 25% o más menos que lo que dan las de su mismo grupo (primíparas o multíparas) con días en leche parecidos (30 días antes o después)' + (MX ? ', hasta ' + MX + ' días en leche' : '') + '. Ordenadas por cuánto les falta en %: primero la que está más lejos de lo esperado.</p>' +
+        '<p class="cap" style="margin:0 0 8px">Dan 25% o más menos que la vaca del medio de su misma lactancia (1ª, 2ª o 3ª y más) con días en leche parecidos (30 días antes o después)' + (MX ? ', hasta ' + MX + ' días en leche' : '') + '. Ordenadas por cuánto les falta en %: primero la que está más lejos de lo esperado.</p>' +
         (bajo.length ? bajo.slice(0, 10).map(fila).join('') + (bajo.length > 10 ? '<div class="ctlmas" hidden>' + bajo.slice(10).map(fila).join('') + '</div><button class="lnk" data-ctlmas="1" style="display:block;margin:10px 0 0">Ver las ' + nf(bajo.length) + '</button>' : '') : '<p class="hint">Ninguna vaca está tan por debajo.</p>') + '</section>';
       return curva + lista + '<style>.ctlleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:2px 0 8px;font-size:13px;color:var(--muted)}.ctlleg span{display:inline-flex;align-items:center;gap:6px}.ctlleg i{width:14px;height:3px;border-radius:2px;display:inline-block}' +
         '.ctlsvg{display:block;font-size:11px;fill:var(--muted);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}.ctlmark{fill:none;stroke:#2EC4B6;stroke-width:2.5;pointer-events:none}.ctlsel>.card{border-color:#2EC4B6}</style>';
