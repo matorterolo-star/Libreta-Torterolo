@@ -876,7 +876,7 @@
     function cargarDhm() {
       if (root.Dhm && root.MDBReader) return Promise.resolve(root.Dhm);
       var uno = function (src) { return new Promise(function (ok, mal) { var s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = function () { mal(new Error('no se pudo descargar el lector de DHM (hace falta internet la primera vez)')); }; document.head.appendChild(s); }); };
-      return (root.MDBReader ? Promise.resolve() : uno('mdb-reader.js?v=1')).then(function () { return root.Dhm ? null : uno('dhm.js?v=6'); }).then(function () { if (!root.Dhm || !root.MDBReader) throw new Error('no se pudo cargar el lector de DHM'); return root.Dhm; });
+      return (root.MDBReader ? Promise.resolve() : uno('mdb-reader.js?v=1')).then(function () { return root.Dhm ? null : uno('dhm.js?v=7'); }).then(function () { if (!root.Dhm || !root.MDBReader) throw new Error('no se pudo cargar el lector de DHM'); return root.Dhm; });
     }
     // exportación de DelPro (DeLaval): .zip con las tablas en CSV; el lector se baja recién la primera vez
     function cargarDelpro() {
@@ -3273,7 +3273,7 @@
     }
     function codeName(c) { var k = DB.codes && DB.codes[String(c)]; return k ? k[1] : 'Código ' + c; }
     // diagnósticos del tacto que piden atención (sucia, anestro, quiste, metritis…): van resaltados en el historial
-    function tacAlerta(n) { return /suci|anestr|quist|metrit|endometr|piometr|retenc/i.test(n || ''); }
+    function tacAlerta(n) { return /suci|anestr|quist|metrit|endometr|piometr|retenc|involuc|urovag|prolap/i.test(n || ''); }
     function tacClass(c) { return c === 1 ? 'prenada' : (c === 7 || c === 105 || c === 72) ? 'vacia' : ''; }
     function criaTxt(r) {
       var m = { M: 'Macho', H: 'Hembra', A: 'Aborto', '?': 'Sin dato' };

@@ -21,8 +21,9 @@
   var cmp = function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; };
   // 3: vacía deducida. DHM guarda solo las preñeces: en un tacto, la servida que no figura preñada quedó vacía
   var CODES = { 1: ['Preñada', 'Preñada', '2'], 2: ['Vacía', 'Vacía', '1'], 3: ['Vacía (deducida del tacto)', 'Vacía', '1'] };
-  // diagnósticos de examen genital que indican vacía (vacía, vacía cicla, anestro, quiste, endometritis, vacía ciclando)
-  var DIAG_VACIA = { 2: 1, 3: 1, 4: 1, 6: 1, 7: 1, 8: 1, 9: 1 };
+  // examen genital (nov 2026): solo "vacía" es diagnóstico de vacía; apta, ciclando, anestro, quiste, endometritis, metritis…
+  // van con su nombre (código 100 + id del diagnóstico de DHM), sin preñez, como los códigos de tacto de SysCaw
+  var DIAG_TACTO = /apta|cicl|anestr|quist|endometr|metrit|piometr|involuc|urovag|prolap|vac/i;
 
   // ¿es una base de Access (Jet 3/4 o ACE)?
   function es(buf) {
@@ -93,6 +94,7 @@
 
   // sel: ids de los establecimientos a cargar (null: todos los que tienen hembras activas)
   function build(D, opts) {
+    var codes = {}; Object.keys(CODES).forEach(function (k) { codes[k] = CODES[k]; });
     opts = opts || {};
     var us = opts.unidades || unidades(D), sel = {};
     (opts.sel && opts.sel.length ? opts.sel : us.map(function (u) { return u.id; })).forEach(function (id) { sel[id] = 1; });
@@ -169,9 +171,22 @@
       var o = ses[k] || (ses[k] = { n: 0, d: [] }); o.n++; if (ds != null && ds > 0) o.d.push(ds);
       if (!mio[p.Ani_IdAnimal] || !unico('P', p.Ani_IdAnimal, f)) return; ver(f); g(p.Ani_IdAnimal).ta.push([f, 1]);
     });
-    T('DHM_ExamenesGenitales', ['Ani_IdAnimal', 'Ege_Fecha', 'Dia_IdDiagnosticoOvario', 'Dia_IdDiagnosticoUtero']).forEach(function (e) {
+    var diag = {}, medic = {};
+    T('DHM_Diagnosticos', ['Dia_IdDiagnostico', 'Dia_Descripcion']).forEach(function (d) { diag[d.Dia_IdDiagnostico] = frase(d.Dia_Descripcion); });
+    T('DHM_Medicamentos', ['Med_IdMedicamento', 'Med_Descripcion']).forEach(function (m) { var n = tx(m.Med_Descripcion); if (n) medic[m.Med_IdMedicamento] = n; });
+    var codDiag = function (id) {
+      var n = diag[id]; if (!n || !DIAG_TACTO.test(n)) return null;
+      if (/^vac[ií]a$/i.test(n)) return 2;
+      if (!codes[100 + id]) codes[100 + id] = [n, n, '1'];
+      return 100 + id;
+    };
+    T('DHM_ExamenesGenitales', ['Ani_IdAnimal', 'Ege_Fecha', 'Dia_IdDiagnosticoOvario', 'Dia_IdDiagnosticoUtero', 'Med_IdMedicamento']).forEach(function (e) {
       var f = fch(e.Ege_Fecha); if (!mio[e.Ani_IdAnimal] || !f) return;
-      if (DIAG_VACIA[e.Dia_IdDiagnosticoOvario] || DIAG_VACIA[e.Dia_IdDiagnosticoUtero]) { ver(f); g(e.Ani_IdAnimal).ta.push([f, 2]); }
+      // el diagnóstico de ovario manda; si vacía figura en cualquiera de los dos, es vacía
+      var co = codDiag(e.Dia_IdDiagnosticoOvario), cu = codDiag(e.Dia_IdDiagnosticoUtero), c = co === 2 || cu === 2 ? 2 : co || cu;
+      if (!c) return;
+      var dr = e.Med_IdMedicamento ? medic[e.Med_IdMedicamento] : null;
+      ver(f); g(e.Ani_IdAnimal).ta.push(dr ? [f, c, dr] : [f, c]);
     });
     // bajas
     var desc = {}; T('DHM_Descartes', ['Ani_IdAnimal', 'Des_Fecha', 'Tde_IdTipoDescarte', 'Mde_IdMotivoDescarte', 'Des_Observaciones', 'Est_IdEstablecimiento']).forEach(function (d) { var f = fch(d.Des_Fecha), x = desc[d.Ani_IdAnimal]; if (!x || (f || '') >= (x.f || '')) desc[d.Ani_IdAnimal] = { f: f, t: d.Tde_IdTipoDescarte, m: d.Mde_IdMotivoDescarte, o: d.Des_Observaciones, u: d.Est_IdEstablecimiento }; });
@@ -290,7 +305,7 @@
       var evs = x.ev.filter(function (e) { return e[0] > lpf; }), sv = evs.filter(function (e) { return e[1] === 'S'; });
       var le = evs.length ? evs[evs.length - 1] : null;
       var tas = x.ta.filter(function (t) { return t[0] >= lpf; }), lt = tas.length ? tas[tas.length - 1] : null;
-      var cd = lt ? CODES[lt[1]] : null, res = cd ? cd[1] : null, preg = !!(cd && cd[2] === '2'), conc = null;
+      var cd = lt ? codes[lt[1]] : null, res = cd ? cd[1] : null, preg = !!(cd && cd[2] === '2'), conc = null;
       if (preg) { var s2 = sv.filter(function (e) { return e[0] <= lt[0]; }); conc = s2.length ? s2[s2.length - 1][0] : null; }
       // aborto después del último tacto (o del último servicio): vacía, con resultado "Aborto" en la fecha del aborto
       var abL = x.ab.filter(function (f) { return f > lpf; }).pop();
@@ -318,7 +333,7 @@
     var elegidas = us.filter(function (u) { return sel[u.id]; });
     // nombre del tambo: el de la unidad, o la parte común de los nombres ("El Teson (MFajardo) T1" y "… T2" → "El Teson (MFajardo)")
     var tambo = elegidas.length === 1 ? elegidas[0].nombre : (function () { var ns = elegidas.map(function (u) { return u.nombre; }), p = ns[0] || ''; ns.forEach(function (n) { while (p && n.indexOf(p) !== 0) p = p.slice(0, -1); }); return p.replace(/[\s\-·,]+(T|U)?$/i, '').trim() || null; })();
-    return { vovsH: root.SysCaw && root.SysCaw.vovsHist ? root.SysCaw.vovsHist(VL, ref) : null, idProd: elegidas.map(function (u) { return u.nro; }), ctrls: ctrls, config: {}, animales: animales, bajas: bajas, hist: hist, codes: CODES, fecha: ref, desdeHist: desdeHist, tambo: tambo, conteoCat: cc, origen: 'dhm', unidades: elegidas, deducidas: nDed, fantasmas: fantasmas };
+    return { vovsH: root.SysCaw && root.SysCaw.vovsHist ? root.SysCaw.vovsHist(VL, ref) : null, idProd: elegidas.map(function (u) { return u.nro; }), ctrls: ctrls, config: {}, animales: animales, bajas: bajas, hist: hist, codes: codes, fecha: ref, desdeHist: desdeHist, tambo: tambo, conteoCat: cc, origen: 'dhm', unidades: elegidas, deducidas: nDed, fantasmas: fantasmas };
   }
 
   // opts.elegir(unidades) -> Promise<[ids]>: se llama si la base trae más de un establecimiento con hembras activas.
