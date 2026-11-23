@@ -1794,6 +1794,132 @@
         '<table class="tbl ptbl ptbl6"><thead><tr><th>Mes</th><th>Ordeñe</th><th>DEL</th><th>Secas</th><th>Prep. vacas</th><th>Prep. vaq.</th></tr></thead><tbody>' + filas + '</tbody></table>' + simTxt +
         '<p class="cap">A mitad de cada mes. DEL: días en leche promedio de las vacas en ordeñe. Secado ' + A.SECADO + ' días antes del parto; preparto los últimos ' + A.PREPARTO + ' días (las vaquillonas entran al preparto ' + A.PREPARTO + ' días antes y después pasan a ordeñe). ' + (sal ? 'Con descartes simulados; no descuenta muertes.' : 'No descuenta descartes ni muertes, y las vacas no preñadas siguen en ordeñe.') + ' Solo con preñeces confirmadas por tacto: lo que todavía depende de vacas sin diagnóstico queda en blanco.</p></section>';
     }
+    /* ----- proyección de guachera (nov 2026) -----
+       Terneras hembras esperadas en la guachera semana a semana, con crianza de 45, 60 o 75 días.
+       Solo partos confirmados por tacto (hasta limReal). Cada parto aporta una fracción de ternera:
+       prob. de hembra según el semen del servicio fecundante × (1 - pérdida de preñez) × (1 - mortalidad al parto).
+       Sexado: si el tambo tiene toros sexados identificados (marcados o con "sexado"/"SX" en el nombre) se deduce de los servicios;
+       si no, % de vaquillonas que paren con sexado por estación (otoño feb–may, invierno jun–ago, primavera sep–ene). */
+    var GP_H = { s: 0.90, n: 0.48, c: 0 };
+    var GP_DEF = { cap: '', perd: 6, mort: 5, so: '', si: '', sp: '', sxv: '', carv: '' };
+    function gParams() {
+      var P = {}; try { P = JSON.parse(getP('guach') || '{}') || {}; } catch (e) { P = {}; }
+      Object.keys(GP_DEF).forEach(function (k) { if (P[k] === undefined) P[k] = GP_DEF[k]; });
+      return P;
+    }
+    function gToros() { try { return JSON.parse(getP('gtoros') || '{}') || {}; } catch (e) { return {}; } }
+    function gNomToro(t) { if (!t || t === '???..' || /^celo/i.test(t)) return null; var s = String(t).trim(), r = s.replace(/^\d+\s+/, ''); return r || s; }
+    function gAutoTipo(t) { return /sexad|sexed|\bsx\b|\(s\)/i.test(t) ? 's' : null; }
+    // toro del servicio fecundante: el servicio más cercano a la concepción (parto probable - gestación)
+    function gToroFec(a, P) {
+      var h = DB.hist && DB.hist[a.rp], conc = A.addDays(P, -A.GEST), best = null;
+      if (h && h.ev) h.ev.forEach(function (e) { if (e[1] !== 'S') return; var d = Math.abs(A.diffDays(e[0], conc)); if (d <= 10 && (!best || d < best[1])) best = [e, d]; });
+      if (best) return gNomToro(best[0][2]);
+      return gNomToro(a.toro);
+    }
+    function gEstacion(f) { var m = +f.slice(5, 7); return m >= 2 && m <= 5 ? 'so' : m >= 6 && m <= 8 ? 'si' : 'sp'; }
+    function gNum(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : null; }
+    function guacheraDatos() {
+      var hoy = today(), lim = limReal(), P = gParams(), TM = gToros();
+      var tipo = function (t) { return t ? (TM[t] || gAutoTipo(t) || 'n') : null; };
+      var esc0 = function (t) { return t && (TM[t] === 's' || (!TM[t] && gAutoTipo(t) === 's')); };
+      var partos = [], toros = {};
+      DB.animales.forEach(function (a) {
+        var c = a.cat || 'vaca'; if (c === 'ternera' || a.estado !== 'prenada') return;
+        var Pp = A.derive(a, hoy).partoProb; if (!Pp || Pp < hoy || Pp > lim) return;
+        var t = gToroFec(a, Pp); if (t) { toros[t] = toros[t] || { n: 0, q: 0 }; toros[t].n++; if (c === 'vaquillona') toros[t].q++; }
+        partos.push({ f: Pp, q: c === 'vaquillona', t: t });
+      });
+      var dedu = Object.keys(toros).some(esc0);
+      var perd = (gNum(P.perd) || 0) / 100, mort = (gNum(P.mort) || 0) / 100, sxv = (gNum(P.sxv) || 0) / 100, carv = (gNum(P.carv) || 0) / 100;
+      var nQ = 0, nQsx = 0, nQsin = 0, nQman = 0, nV = 0, nVsin = 0, esp = 0, espQ = 0;
+      partos.forEach(function (x) {
+        var tp = dedu ? tipo(x.t) : null, ph;
+        if (x.q) {
+          nQ++;
+          if (tp) { ph = GP_H[tp]; if (tp === 's') nQsx++; }
+          else { var ps = (gNum(P[gEstacion(x.f)]) || 0) / 100; ph = ps * GP_H.s + (1 - ps) * GP_H.n; nQman++; if (dedu) nQsin++; }
+        } else {
+          nV++;
+          if (x.t && TM[x.t]) ph = GP_H[TM[x.t]];
+          else if (tp) ph = GP_H[tp];
+          else { ph = sxv * GP_H.s + carv * GP_H.c + Math.max(0, 1 - sxv - carv) * GP_H.n; if (dedu) nVsin++; }
+        }
+        x.w = ph * (1 - perd) * (1 - mort); esp += x.w; if (x.q) espQ += x.w;
+      });
+      // terneras que ya están: hembras nacidas en los últimos 75 días (terneras registradas; si no hay, crías hembra anotadas en los partos)
+      var naci = [], d75 = A.addDays(hoy, -75);
+      DB.animales.forEach(function (a) { if (a.cat !== 'ternera') return; var h = DB.hist && DB.hist[a.rp]; if (h && h.fn && h.fn > d75 && h.fn <= hoy) naci.push({ f: h.fn, w: 1 }); });
+      if (!naci.length && DB.hist) Object.keys(DB.hist).forEach(function (k) { var h = DB.hist[k]; if (!h || !h.pa) return; h.pa.forEach(function (p) { if (p[0] > d75 && p[0] <= hoy) { var nh = String(p[2] || '').split('/').filter(function (c) { return c === 'H'; }).length; if (nh) naci.push({ f: p[0], w: nh * (1 - mort) }); } }); });
+      return { hoy: hoy, lim: lim, P: P, TM: TM, partos: partos, naci: naci, toros: toros, dedu: dedu, nQ: nQ, nQsx: nQsx, nQsin: nQsin, nQman: nQman, nV: nV, nVsin: nVsin, esp: esp, espQ: espQ };
+    }
+    function guacheraSemanas(G, N) {
+      var d = new Date(G.hoy + 'T12:00:00'), dw = (d.getDay() + 6) % 7, ini = A.addDays(G.hoy, -dw), S = [], todos = G.naci.concat(G.partos);
+      for (var D = ini; D <= G.lim; D = A.addDays(D, 7)) {
+        var fin = A.addDays(D, 6), desde = A.addDays(fin, -N), v = 0;
+        todos.forEach(function (x) { if (x.f > desde && x.f <= fin) v += x.w; });
+        S.push({ f: D, v: v });
+      }
+      return S;
+    }
+    function guacheraHTML() {
+      if (esOperario() || !DB.animales.length) return '';
+      var G = guacheraDatos(); if (!G.partos.length) return '';
+      if (!state.gCr) state.gCr = +getP('gcr') || 60;
+      var N = state.gCr, S = guacheraSemanas(G, N), cap = gNum(G.P.cap), fd = function (f) { return +f.slice(8, 10) + ' ' + A.MESES[+f.slice(5, 7) - 1]; };
+      if (!S.length) return '';
+      var vals = S.map(function (s) { return Math.round(s.v); }), pico = Math.max.apply(null, vals), iP = vals.indexOf(pico);
+      var sobre = cap ? vals.map(function (v, i) { return v > cap ? i : -1; }).filter(function (i) { return i >= 0; }) : [];
+      // gráfico semanal: barras rojas las semanas en que se pasa de la capacidad
+      var W = 320, H = 150, padx = 4, n = S.length, gap = n > 30 ? 1.5 : 2.5, bw = (W - padx * 2 - gap * (n - 1)) / n, top = Math.max(pico, cap || 0) || 1, k = (H - 40) / top, base = H - 24, s = '', mAnt = null, xAnt = null;
+      S.forEach(function (w, i) {
+        var x = padx + i * (bw + gap), h = vals[i] * k, mal = cap && vals[i] > cap;
+        if (h) s += '<rect class="' + (mal ? 'gbarm' : 'gbar') + '" x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1"><title>Semana del ' + fd(w.f) + ': ' + vals[i] + ' terneras</title></rect>';
+        var mm = w.f.slice(0, 7); if (mm !== mAnt && (xAnt == null || x - xAnt >= 20)) { mAnt = mm; xAnt = x; s += '<text class="mlbl" x="' + x.toFixed(1) + '" y="' + (H - 9) + '">' + A.MESES[+w.f.slice(5, 7) - 1] + '</text>'; }
+      });
+      if (iP >= 0 && pico) s += '<text class="mval" x="' + Math.min(W - 14, Math.max(10, padx + iP * (bw + gap) + bw / 2)).toFixed(1) + '" y="' + (base - pico * k - 4).toFixed(1) + '" text-anchor="middle">' + pico + '</text>';
+      if (cap) { var yc = (base - cap * k).toFixed(1); s += '<line class="gcap" x1="' + padx + '" x2="' + (W - padx) + '" y1="' + yc + '" y2="' + yc + '"/><text class="gcapt" x="' + padx + '" y="' + (yc - 4) + '">capacidad ' + cap + '</text>'; }
+      var chips = '<div class="secsel"><span>Crianza</span>' + [45, 60, 75].map(function (d) { return '<button class="fchip plain" data-gcr="' + d + '" aria-pressed="' + (N === d) + '">' + d + '</button>'; }).join('') + '<span>días</span></div>';
+      var kp = '<div class="kpis kpis2"><div' + (sobre.length ? ' class="mal"' : '') + '><b>' + pico + '</b><span>Pico · semana del ' + fd(S[iP].f) + '</span></div>' +
+        (cap ? '<div' + (sobre.length ? ' class="mal"' : ' class="ok"') + '><b>' + sobre.length + '</b><span>' + (sobre.length ? 'Semanas sobre ' + cap + ' · desde el ' + fd(S[sobre[0]].f) : 'Semanas sobre ' + cap + ' · no se pasa') + '</span></div>'
+          : '<div><b>' + vals[0] + '</b><span>Hoy en la guachera</span></div>') + '</div>';
+      // resumen del sexado de las vaquillonas
+      var pc = function (v) { var x = gNum(v); return x == null ? '0%' : nf(x) + '%'; };
+      var sx = !G.nQ ? '' : G.dedu ? 'de los servicios: ' + nf(Math.round(G.nQsx / Math.max(1, G.nQ - G.nQsin) * 100)) + '%' + (G.nQsin ? ' (' + G.nQsin + ' sin toro, a mano)' : '')
+        : 'otoño ' + pc(G.P.so) + ' · inv ' + pc(G.P.si) + ' · prim ' + pc(G.P.sp);
+      var fila = sx ? '<div class="gfila"><span>Vaquillonas con sexado</span><b>' + sx + '</b></div>' : '';
+      var aj = state.gAj ? guacheraAjustes(G) : '';
+      return '<section class="card guach"><h2>Proyección de guachera</h2>' + chips + kp +
+        '<svg class="mchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Terneras en la guachera por semana">' + s + '</svg>' +
+        '<p class="cap">Hasta el ' + fd(S[S.length - 1].f) + ': lo que viene después todavía depende de vacas sin tacto. ' + nf(G.esp) + ' terneras esperadas de ' + G.partos.length + ' partos confirmados.</p>' + fila +
+        '<button class="despbtn" data-a="gaj" aria-expanded="' + !!state.gAj + '"><span>Ajustes del tambo</span><span class="chev">' + (state.gAj ? 'ocultar' : 'ver') + '</span></button>' + aj +
+        '<details class="nota"><summary>Cómo se calcula</summary><p class="cap">Cada parto confirmado por tacto aporta una ternera esperada: probabilidad de hembra (semen sexado 0,90; convencional 0,48; carne 0) × (1 − pérdida de preñez) × (1 − mortalidad al parto). La ternera ocupa un lugar desde que nace hasta el día ' + N + '. Cada barra es la suma de las terneras esperadas nacidas en los ' + N + ' días anteriores a esa semana, más las hembras que ya nacieron. La baja de preñez del sexado no cuenta: ya son preñeces confirmadas. Estaciones para el sexado de vaquillonas: otoño feb–may, invierno jun–ago, primavera sep–ene, según la fecha de parto.</p></details></section>';
+    }
+    function guacheraAjustes(G) {
+      var P = G.P, inp = function (k, lbl, suf) { return '<label class="xnum">' + lbl + ' <input type="number" inputmode="decimal" min="0" max="' + (k === 'cap' ? 9999 : 100) + '" data-gp="' + k + '" value="' + esc(P[k] == null ? '' : P[k]) + '" placeholder="–"> ' + (suf || '') + '</label>'; };
+      var h = '<div class="gaj">' + inp('cap', 'Capacidad de la guachera', 'lugares');
+      if (G.nQ) {
+        h += '<h3 class="vh3">Vaquillonas que paren con sexado</h3>';
+        if (G.dedu && !G.nQsin) h += '<p class="gok">No hace falta: se calcula de los servicios (' + nf(Math.round(G.nQsx / G.nQ * 100)) + '% de las vaquillonas preñadas con sexado).</p>';
+        else {
+          if (G.dedu) h += '<p class="cap">Se usa solo para ' + G.nQsin + (G.nQsin === 1 ? ' parto' : ' partos') + ' de vaquillona sin toro identificado.</p>';
+          h += inp('so', 'Otoño (feb–may)', '%') + inp('si', 'Invierno (jun–ago)', '%') + inp('sp', 'Primavera (sep–ene)', '%');
+        }
+      }
+      if (G.nV) {
+        h += '<h3 class="vh3">Vacas</h3>';
+        if (G.dedu && !G.nVsin) h += '<p class="gok">No hace falta: el semen de las vacas se calcula de los servicios.</p>';
+        else { if (G.dedu) h += '<p class="cap">Se usa solo para ' + G.nVsin + (G.nVsin === 1 ? ' parto' : ' partos') + ' de vaca sin toro identificado.</p>'; h += inp('sxv', 'Con sexado', '%') + inp('carv', 'Con carne', '%'); }
+      }
+      h += '<h3 class="vh3">Pérdidas</h3>' + inp('perd', 'Pérdida de preñez hasta el parto', '%') + inp('mort', 'Mortalidad al parto', '%');
+      var T = Object.keys(G.toros).sort(function (a, b) { return G.toros[b].n - G.toros[a].n; });
+      if (T.length) {
+        h += '<h3 class="vh3">Toros de las preñadas</h3><p class="cap">Marcá los sexados y los de carne. Si hay al menos un sexado marcado, el sexado se calcula de los servicios y no hace falta el porcentaje.</p><div class="gtoros">' +
+          T.map(function (t) { var tp = G.TM[t] || gAutoTipo(t) || 'n', x = G.toros[t]; return '<div class="gtoro"><span>' + esc(t) + '<small>' + x.n + (x.n === 1 ? ' preñez' : ' preñeces') + (x.q ? ' · ' + x.q + ' vaq.' : '') + '</small></span><span class="gtsel">' +
+            [['n', 'Conv.'], ['s', 'Sexado'], ['c', 'Carne']].map(function (o) { return '<button class="fchip plain" data-gtoro="' + esc(t) + '" data-gt="' + o[0] + '" aria-pressed="' + (tp === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</span></div>'; }).join('') + '</div>';
+      }
+      return h + '</div>';
+    }
     /* ----- reproducción cada 21 días ----- */
     var PEVS = [40, 45, 50, 60];
     // espera voluntaria: la que eligió el veterinario para este tambo (queda guardada), si no la de la base, si no 45
@@ -3083,7 +3209,7 @@
       'Control': ['', '<path d="M4 4v20h20"/><circle cx="9" cy="17" r="1.6"/><circle cx="13" cy="11" r="1.6"/><circle cx="17" cy="13" r="1.6"/><circle cx="21" cy="17" r="1.6"/><circle cx="12" cy="18" r="1.6"/>'],
       'Mastitis': ['', '<path d="M14 3.5s-7.5 8.6-7.5 14a7.5 7.5 0 0 0 15 0c0-5.4-7.5-14-7.5-14z"/><path d="M14 13v8M10 17h8"/>'],
       'Las vacas': ['', '<path d="M6 10h16l-2 14H8zM6 10c0-3 3.5-5 8-5s8 2 8 5M14 13.5s-2.5 3-2.5 4.6a2.5 2.5 0 0 0 5 0c0-1.6-2.5-4.6-2.5-4.6z"/>'] };
-    var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días, tactos y celos', 'Lo que viene': 'Partos y rodeo por mes', 'El rodeo': 'Vacas por año, índice, condición',
+    var MS_DESC = { 'Lo que pasó': 'Partos, ordeñe y secas, salidas', 'Reproducción': 'Ciclos de 21 días, tactos y celos', 'Lo que viene': 'Partos, rodeo y guachera', 'El rodeo': 'Vacas por año, índice, condición',
       'Para hacer': 'Tactar, secar y partos', 'Listas para llevar': 'Listados y planillas en Excel', 'Gestión': 'Venta e inseminadores', 'Sanidad': 'Plan sanitario del tambo',
       'Control': 'Último control, curva y vacas por debajo', 'Evolución': 'Últimos 12 meses y curva de lactancia', 'Las vacas': 'Por lactancia, por lote, las que más bajaron', 'Mastitis': 'Casos, metas y días en leche' };
     // G: [título, html, crudo] (crudo = el html ya trae su propio título)
@@ -3116,7 +3242,7 @@
       // mosaico: cuatro cuadros que abren su propia pantalla con Volver; un tema sin tarjetas no aparece
       var G = [['Lo que pasó', partosOcHTML() + vovsHTML() + salTempHTML()],
         ['Reproducción', repHTML() + tactosZafraHTML() + celosPerdidosHTML() + (prenOK() ? prenHTML() : '')],
-        ['Lo que viene', lecturaHTML() + probables + proyHTML()],
+        ['Lo que viene', lecturaHTML() + probables + proyHTML() + guacheraHTML()],
         ['El rodeo', vacasAnioHTML() + idxCardHTML() + (prenOK() ? ccRodeoHTML() : '') + vidaHTML()]];
       return '<h1 class="ptitle">Rodeo</h1>' + catsHTML() + mosaicoHTML('rodeo', G);
     }
@@ -6192,6 +6318,8 @@
       if ((el = e.target.closest('[data-icm]'))) { var mm = (state.insCalM || insFechas()[1].slice(0, 7)).split('-').map(Number), dt = new Date(mm[0], mm[1] - 1 + (+el.dataset.icm), 1, 12); state.insCalM = A.ymd(dt).slice(0, 7); render(); return; }
       if ((el = e.target.closest('[data-icd]'))) { var kd = state.insCal === 'd0' ? 'insD0' : 'insD1'; state[kd] = el.dataset.icd; setP(kd.toLowerCase(), el.dataset.icd); if (state.insCal === 'd0') { state.insCal = 'd1'; state.insCalM = insFechas()[1].slice(0, 7); } else state.insCal = null; render(); return; }
       if ((el = e.target.closest('[data-insel]'))) { state.insSel = el.dataset.insel; render(); return; }
+      if ((el = e.target.closest('[data-gcr]'))) { state.gCr = +el.dataset.gcr; setP('gcr', el.dataset.gcr); render(); return; }
+      if ((el = e.target.closest('[data-gtoro]'))) { var gT = gToros(), gt = el.dataset.gt, gn = el.dataset.gtoro; if (gt === (gAutoTipo(gn) || 'n')) delete gT[gn]; else gT[gn] = gt; setP('gtoros', JSON.stringify(gT)); render(); return; }
       if ((el = e.target.closest('[data-sec]'))) { A.setSecado(+el.dataset.sec); try { localStorage.setItem('libreta:secado', el.dataset.sec); } catch (x) {} render(); return; }
       if ((el = e.target.closest('[data-plg]'))) { var sec = el.parentNode, ab = !sec.classList.contains('open'); sec.classList.toggle('open', ab); el.setAttribute('aria-expanded', ab); if (ab) FICHA_AB[el.dataset.plg] = 1; else delete FICHA_AB[el.dataset.plg]; return; }
       if ((el = e.target.closest('[data-desp]'))) { state.desp = state.desp || {}; state.desp[el.dataset.desp] = !state.desp[el.dataset.desp]; render(); return; }
@@ -6229,6 +6357,7 @@
       else if (a === 'toroal') { state.toroAb = !state.toroAb; render(); }
       else if (a === 'lnkbuscar') { closeSheet(); actualizarDesdeLink(true); }
       else if (a === 'simlista') { state.simLista = !state.simLista; render(); }
+      else if (a === 'gaj') { state.gAj = !state.gAj; render(); }
       else if (a === 'repti') { state.repTI = !state.repTI; render(); }
       else if (a === 'c21') { var nc2 = +b.dataset.n; state.cicloPq = state.cicloPq === nc2 ? null : nc2; render(); }
       else if (a === 'ini21def') ini21Default();
@@ -6326,6 +6455,7 @@
     });
     document.addEventListener('change', function (e) {
       if ((e.target.id === 'vomes' || e.target.id === 'pomes') && e.target.value) { state.vomes = e.target.value; render(); return; }
+      if (e.target.dataset && e.target.dataset.gp) { var gP = gParams(), gv = String(e.target.value).trim(); gP[e.target.dataset.gp] = gv === '' ? '' : gv; setP('guach', JSON.stringify(gP)); render(); return; }
       if (e.target.id === 'simDesc') { state.simDesc = e.target.checked; setP('simdesc', state.simDesc ? '1' : ''); render(); return; }
       if (e.target.id === 'pobSel') { state.pobModo = e.target.value; render(); return; }
       if (e.target.classList && e.target.classList.contains('pobToro')) { pobToroSet(e.target.dataset.toro, e.target.checked); state.pobToroAb = true; render(); return; }
