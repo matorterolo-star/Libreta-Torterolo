@@ -3391,26 +3391,47 @@
       var big = inc != null ? '<div class="mbig"><b class="' + clsInc(inc) + '">' + nf(inc) + '</b><span>casos cada 100 vacas en ordeñe por año</span></div>' +
         '<div class="mmeter"><i style="width:' + (MAST_META / 50 * 100) + '%"></i><em style="left:' + (MAST_META / 50 * 100) + '%;width:' + ((MAST_ALERTA - MAST_META) / 50 * 100) + '%"></em><u style="left:' + Math.min(99, inc / 50 * 100) + '%"></u></div>' +
         '<div class="mml"><span>0</span><span style="left:' + (MAST_META / 50 * 100) + '%">' + MAST_META + ' meta</span><span style="left:' + (MAST_ALERTA / 50 * 100) + '%">' + MAST_ALERTA + ' alerta</span><span>50</span></div>' : '';
-      var vista = state.mastVista || 'del', barras;
+      // dos formas de contar (nov 2026): por casos (Michigan / AHDB, con metas) o por vacas tratadas (sin meta en la bibliografía)
+      var cont = state.mastCont === 'vacas' ? 'vacas' : 'casos', vista = state.mastVista || 'del', barras;
+      var cuenta = function (L) { if (cont === 'casos') return L.length; var o = {}; L.forEach(function (c) { o[c.v] = 1; }); return Object.keys(o).length; };
       if (vista === 'del') {
-        var B = [['0–30', 0, 30], ['31–60', 31, 60], ['61–100', 61, 100], ['101–200', 101, 200], ['201–300', 201, 300], ['+300', 301, 1e9]].map(function (b) { return { l: b[0], n: conD.filter(function (c) { return c.dpp >= b[1] && c.dpp <= b[2]; }).length }; });
-        barras = B;
+        barras = [['0–30', 0, 30], ['31–60', 31, 60], ['61–100', 61, 100], ['101–200', 101, 200], ['201–300', 201, 300], ['+300', 301, 1e9]].map(function (b) { return { l: b[0], n: cuenta(conD.filter(function (c) { return c.dpp >= b[1] && c.dpp <= b[2]; })) }; });
       } else {
         var MS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'], y = +ref.slice(0, 4), m = +ref.slice(5, 7); barras = [];
         for (var k = 0; k < 12; k++) { barras.unshift({ k: y + '-' + (m < 10 ? '0' : '') + m, l: MS[m - 1], n: 0 }); if (--m < 1) { m = 12; y--; } }
-        casos.forEach(function (c) { barras.forEach(function (o) { if (c.f.slice(0, 7) === o.k) o.n++; }); });
+        barras.forEach(function (o) { o.n = cuenta(casos.filter(function (c) { return c.f.slice(0, 7) === o.k; })); });
       }
-      var mx = Math.max.apply(null, barras.map(function (o) { return o.n; })) || 1;
-      return '<section class="card"><h2>Mastitis</h2><p class="cap" style="margin:-4px 0 10px">' + nf(casos.length) + (casos.length === 1 ? ' caso' : ' casos') + ' en ' + nf(nV) + (nV === 1 ? ' vaca' : ' vacas') + ' · últimos 12 meses</p>' + big +
-        '<div class="mks">' +
-        tile('Repetidos', nf(pRep) + '%', 'meta &lt;' + MAST_META_PCT + '%', cls(pRep, MAST_META_PCT)) +
-        tile('Más de un cuarto', hayCuarto ? nf(pMul) + '%' : '–', hayCuarto ? 'meta &lt;' + MAST_META_PCT + '%' : 'sin cuarto anotado', hayCuarto ? cls(pMul, MAST_META_PCT) : '') +
-        tile('Primeros 30 días', conD.length ? nf(p30 / conD.length * 100) + '%' : '–', 'de los casos') +
-        tile('Primíparas', conN.length ? nf(pri / conN.length * 100) + '%' : '–', 'de los casos') + '</div>' +
+      var mx = Math.max.apply(null, barras.map(function (o) { return o.n; })) || 1, cuerpo, nota;
+      if (cont === 'casos') {
+        cuerpo = big + '<div class="mks">' +
+          tile('Repetidos', nf(pRep) + '%', 'meta &lt;' + MAST_META_PCT + '%', cls(pRep, MAST_META_PCT)) +
+          tile('Más de un cuarto', hayCuarto ? nf(pMul) + '%' : '–', hayCuarto ? 'meta &lt;' + MAST_META_PCT + '%' : 'sin cuarto anotado', hayCuarto ? cls(pMul, MAST_META_PCT) : '') +
+          tile('Primeros 30 días', conD.length ? nf(p30 / conD.length * 100) + '%' : '–', 'de los casos') +
+          tile('Primíparas', conN.length ? nf(pri / conN.length * 100) + '%' : '–', 'de los casos') + '</div>';
+        nota = 'Un caso es mastitis en uno o más cuartos de la vaca; otro registro dentro de 14 días es el mismo caso (Michigan State University, Ruegg). Casos cada 100 vacas en ordeñe por año: verde por debajo de la meta de Michigan (24); ámbar de 24 a 35, el nivel en que la guía inglesa AHDB pide actuar; rojo 35 o más. Repetidos y más de un cuarto: meta de Michigan, menos de 20 %. Un mes sin casos puede ser un mes sin registro.';
+      } else {
+        // por vaca: cada vaca cuenta una vez en el año (y una vez en cada tramo de días en leche o mes en que tuvo un caso)
+        var porV = {}; casos.forEach(function (c) { (porV[c.v] = porV[c.v] || []).push(c); });
+        var VV = Object.keys(porV).map(function (k) { return porV[k]; });
+        var incV = vo >= 10 ? nV / vo * 100 : null, v2 = VV.filter(function (L) { return L.length >= 2; }).length;
+        var vD = VV.filter(function (L) { return L.some(function (c) { return c.dpp != null; }); }), v30 = vD.filter(function (L) { return L.some(function (c) { return c.dpp != null && c.dpp <= 30; }); }).length;
+        var vN = VV.filter(function (L) { return L[0].nro; }), vPri = vN.filter(function (L) { return L[0].nro === 1; }).length;
+        cuerpo = (incV != null ? '<div class="mbig"><b>' + nf(incV) + '</b><span>vacas tratadas cada 100 vacas en ordeñe por año</span></div>' : '') +
+          '<div class="mks">' +
+          tile('Casos por vaca', (casos.length / nV).toLocaleString('es-UY', { minimumFractionDigits: 1, maximumFractionDigits: 1 }), nf(casos.length) + ' casos ÷ ' + nf(nV) + ' vacas') +
+          tile('Con 2 casos o más', nf(v2 / nV * 100) + '%', 'de las vacas') +
+          tile('Primeros 30 días', vD.length ? nf(v30 / vD.length * 100) + '%' : '–', 'de las vacas') +
+          tile('Primíparas', vN.length ? nf(vPri / vN.length * 100) + '%' : '–', 'de las vacas') + '</div>';
+        nota = 'Cada vaca cuenta una sola vez aunque haya tenido varios casos en el año; en las barras, una vez en cada tramo de días en leche o mes en que tuvo un caso. Vacas tratadas cada 100 vacas en ordeñe por año: vacas con al menos un caso ÷ promedio de vacas en ordeñe de los 12 meses × 100. La bibliografía da metas por casos, no por vacas: esta vista no tiene semáforo y sirve para comparar el tambo consigo mismo. Un caso: registros de la misma vaca dentro de 14 días son el mismo caso.';
+      }
+      return '<section class="card"><h2>Mastitis</h2><p class="cap" style="margin:-4px 0 10px">' + nf(casos.length) + (casos.length === 1 ? ' caso' : ' casos') + ' en ' + nf(nV) + (nV === 1 ? ' vaca' : ' vacas') + ' · últimos 12 meses</p>' +
+        '<div class="mtg mtg2"><button data-a="mastc" data-mc="casos"' + (cont === 'casos' ? ' class="on"' : '') + '>Casos</button><button data-a="mastc" data-mc="vacas"' + (cont === 'vacas' ? ' class="on"' : '') + '>Vacas tratadas</button></div>' +
+        cuerpo +
         '<div class="mtg"><button data-a="mastv" data-mv="del"' + (vista === 'del' ? ' class="on"' : '') + '>Por días en leche</button><button data-a="mastv" data-mv="mes"' + (vista === 'mes' ? ' class="on"' : '') + '>Por mes</button></div>' +
+        '<p class="mabt">' + (cont === 'casos' ? 'Casos' : 'Vacas tratadas') + (vista === 'del' ? ' por días en leche' : ' por mes') + '</p>' +
         '<div class="mab">' + barras.map(function (o) { return '<div><i style="height:' + Math.round(o.n / mx * 100) + '%"></i><b>' + (o.n || '') + '</b></div>'; }).join('') + '</div>' +
         '<div class="mabl">' + barras.map(function (o) { return '<span>' + o.l + '</span>'; }).join('') + '</div>' +
-        '<p class="cap">Un caso es mastitis en uno o más cuartos de la vaca; otro registro dentro de 14 días es el mismo caso (Michigan State University, Ruegg). Casos cada 100 vacas en ordeñe por año: verde por debajo de la meta de Michigan (24); ámbar de 24 a 35, el nivel en que la guía inglesa AHDB pide actuar; rojo 35 o más. Repetidos y más de un cuarto: meta de Michigan, menos de 20 %. Un mes sin casos puede ser un mes sin registro.</p></section>';
+        '<p class="cap">' + nota + '</p></section>';
     }
     function histHTML(a, h) {
       var t = today(), R = resumenHist(h), segs = R.segs.slice().reverse();
@@ -6163,6 +6184,7 @@
       else if (a === 'ixtoro') { state.idxToro = b.dataset.tor; render(); }
       else if (a === 'ixtoros') { state.idxToro = null; render(); }
       else if (a === 'mastv') { state.mastVista = b.dataset.mv; render(); }
+      else if (a === 'mastc') { state.mastCont = b.dataset.mc; render(); }
       else if (a === 'tzsel') { state.tzSel = state.tzSel === b.dataset.tzf ? null : b.dataset.tzf; render(); }
       else if (a === 'ajustes') openSheet('Ajustes');
       else if (a === 'cerrar') closeSheet();
