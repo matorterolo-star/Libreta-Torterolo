@@ -3354,14 +3354,14 @@
     var MAST_META = 24, MAST_ALERTA = 35, MAST_META_PCT = 20;
     function mastitisHTML() {
       if (!DB.hist) return '';
-      var ref = DB.fecha || today(), desde = A.addDays(ref, -365), casos = [], vacasDias = 0, hayCuarto = false;
+      var ref = DB.fecha || today(), desde = A.addDays(ref, -365), casos = [], vacasDias = 0, hayCuarto = false, expuestas = {};
       var cuarto = function (t) { return /\b[ap]\.?\s?[id]\b\.?/i.test(t || ''); };
       infLista().forEach(function (x, ix) {
         var h = x.h, pa = h.pa || [], fb = x.a.bFecha || null;
         // días en ordeñe dentro de los 12 meses: de cada parto al secado (o al parto siguiente, la baja o hoy)
         pa.forEach(function (p, i) {
           var fin = p[5] || (pa[i + 1] ? pa[i + 1][0] : (fb || ref)), a0 = p[0] > desde ? p[0] : desde, b0 = fin < ref ? fin : ref;
-          if (b0 > a0 && enSel(unidadEn(x, a0))) vacasDias += A.diffDays(b0, a0);
+          if (b0 > a0 && enSel(unidadEn(x, a0))) { vacasDias += A.diffDays(b0, a0); expuestas[ix] = 1; }
         });
         var ult = null, cur = null;
         (h.sa || []).forEach(function (e) {
@@ -3413,16 +3413,16 @@
         // por vaca: cada vaca cuenta una vez en el año (y una vez en cada tramo de días en leche o mes en que tuvo un caso)
         var porV = {}; casos.forEach(function (c) { (porV[c.v] = porV[c.v] || []).push(c); });
         var VV = Object.keys(porV).map(function (k) { return porV[k]; });
-        var incV = vo >= 10 ? nV / vo * 100 : null, v2 = VV.filter(function (L) { return L.length >= 2; }).length;
+        var nExp = Object.keys(expuestas).length, incV = nExp >= 10 ? nV / nExp * 100 : null, v2 = VV.filter(function (L) { return L.length >= 2; }).length;
         var vD = VV.filter(function (L) { return L.some(function (c) { return c.dpp != null; }); }), v30 = vD.filter(function (L) { return L.some(function (c) { return c.dpp != null && c.dpp <= 30; }); }).length;
         var vN = VV.filter(function (L) { return L[0].nro; }), vPri = vN.filter(function (L) { return L[0].nro === 1; }).length;
-        cuerpo = (incV != null ? '<div class="mbig"><b>' + nf(incV) + '</b><span>vacas tratadas cada 100 vacas en ordeñe por año</span></div>' : '') +
+        cuerpo = (incV != null ? '<div class="mbig"><b>' + nf(incV) + '%</b><span>de las vacas que estuvieron en ordeñe tuvo mastitis</span></div><p class="cap" style="margin:-2px 0 10px">' + nf(nV) + ' de ' + nf(nExp) + ' vacas que pasaron por el ordeñe en los últimos 12 meses</p>' : '') +
           '<div class="mks">' +
           tile('Casos por vaca', (casos.length / nV).toLocaleString('es-UY', { minimumFractionDigits: 1, maximumFractionDigits: 1 }), nf(casos.length) + ' casos ÷ ' + nf(nV) + ' vacas') +
           tile('Con 2 casos o más', nf(v2 / nV * 100) + '%', 'de las vacas') +
           tile('Primeros 30 días', vD.length ? nf(v30 / vD.length * 100) + '%' : '–', 'de las vacas') +
           tile('Primíparas', vN.length ? nf(vPri / vN.length * 100) + '%' : '–', 'de las vacas') + '</div>';
-        nota = 'Cada vaca cuenta una sola vez aunque haya tenido varios casos en el año; en las barras, una vez en cada tramo de días en leche o mes en que tuvo un caso. Vacas tratadas cada 100 vacas en ordeñe por año: vacas con al menos un caso ÷ promedio de vacas en ordeñe de los 12 meses × 100. La bibliografía da metas por casos, no por vacas: esta vista no tiene semáforo y sirve para comparar el tambo consigo mismo. Un caso: registros de la misma vaca dentro de 14 días son el mismo caso.';
+        nota = 'Cada vaca cuenta una sola vez aunque haya tenido varios casos en el año; en las barras, una vez en cada tramo de días en leche o mes en que tuvo un caso. % de vacas con mastitis: vacas con al menos un caso ÷ todas las vacas que estuvieron en ordeñe en algún momento de los 12 meses (las que tuvieron chance de enfermar, aunque después se secaran, se vendieran o murieran) × 100. La bibliografía da metas por casos, no por vacas: esta vista no tiene semáforo y sirve para comparar el tambo consigo mismo. Un caso: registros de la misma vaca dentro de 14 días son el mismo caso.';
       }
       return '<section class="card"><h2>Mastitis</h2><p class="cap" style="margin:-4px 0 10px">' + nf(casos.length) + (casos.length === 1 ? ' caso' : ' casos') + ' en ' + nf(nV) + (nV === 1 ? ' vaca' : ' vacas') + ' · últimos 12 meses</p>' +
         '<div class="mtg mtg2"><button data-a="mastc" data-mc="casos"' + (cont === 'casos' ? ' class="on"' : '') + '>Casos</button><button data-a="mastc" data-mc="vacas"' + (cont === 'vacas' ? ' class="on"' : '') + '>Vacas tratadas</button></div>' +
