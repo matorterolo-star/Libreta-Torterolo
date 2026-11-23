@@ -3,7 +3,8 @@
 (function (root) {
   'use strict';
   var GEST = 283;
-  var T = { MASTITIS: 1, PARTO: 4, SERVICIO: 5, SECADO: 6, ABORTO: 7, CELO: 8, TACTO: 9, CONTROL: 10, BAJA: 11, DESCARTE: 12 };
+  var T = { MASTITIS: 1, PARTO: 4, SERVICIO: 5, SECADO: 6, ABORTO: 7, CELO: 8, TACTO: 9, CONTROL: 10, BAJA: 11, DESCARTE: 12, SANIDAD: 20 };
+  // SANIDAD (20): otro evento sanitario; lo usan las bases armadas desde otros programas (p. ej. DairyPlan), con SANTIPO (P patas, U otra de ubre, E otro), DIAGNOSTICO y TRATAMIENTO
   // ESTADOVACA del control reproductivo: 1 preñada, 3 vacía (comprobado con los partos siguientes); el resto se muestra con su número
   var ESTADOS = { 1: ['Preñada', 'Preñada', '2'], 2: ['Dudosa', 'Dudosa', ''], 3: ['Vacía', 'Vacía', '1'] };
   var pad = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -93,8 +94,9 @@
       else if (t === T.CELO) g.ev.push([f, 'C', '', null]);
       else if (t === T.TACTO) { var e = D(id, 'ESTADOVACA', 'n'); if (e) g.ta.push([f, e]); }
       else if (t === T.CONTROL) { var l = (D(id, 'LITROSAM', 'n') || 0) + (D(id, 'LITROSPM', 'n') || 0); if (l > 0) g.ctAll.push([f, Math.round(l * 10) / 10, null, null, null]); }
-      else if (t === T.SECADO) g.sec.push(f);
-      else if (t === T.MASTITIS) g.sa.push([f, 'M', null, null]);
+      else if (t === T.SECADO) { g.sec.push(f); var tr = D(id, 'TRATAMIENTO', 't'); if (tr) g.sa.push([f, 'S', null, tr]); }
+      else if (t === T.MASTITIS) g.sa.push([f, 'M', D(id, 'DIAGNOSTICO', 't') || null, D(id, 'TRATAMIENTO', 't') || null]);
+      else if (t === T.SANIDAD) g.sa.push([f, D(id, 'SANTIPO', 't') || 'E', D(id, 'DIAGNOSTICO', 't') || null, D(id, 'TRATAMIENTO', 't') || null]);
       else if (t === T.ABORTO) g.ab.push(f);
       else if (t === T.BAJA) { if (!g.baja || f > g.baja[0]) g.baja = [f, D(id, 'CAUSABAJAID', 'n')]; }
       else if (t === T.DESCARTE) { if (!g.desc || f > g.desc[0]) g.desc = [f, D(id, 'MOTIVODESCARTE', 'n')]; }
