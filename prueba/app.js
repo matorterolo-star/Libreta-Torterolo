@@ -3431,7 +3431,8 @@
         '<p class="mabt">' + (cont === 'casos' ? 'Casos' : 'Vacas tratadas') + (vista === 'del' ? ' por días en leche' : ' por mes') + '</p>' +
         '<div class="mab">' + barras.map(function (o) { return '<div><i style="height:' + Math.round(o.n / mx * 100) + '%"></i><b>' + (o.n || '') + '</b></div>'; }).join('') + '</div>' +
         '<div class="mabl">' + barras.map(function (o) { return '<span>' + o.l + '</span>'; }).join('') + '</div>' +
-        '<p class="cap">' + nota + '</p></section>';
+        '<p class="cap">' + nota + '</p>' +
+        '<button class="btn mxls" data-a="mastxls"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Listado por lactancia (Excel)</button></section>';
     }
     function histHTML(a, h) {
       var t = today(), R = resumenHist(h), segs = R.segs.slice().reverse();
@@ -5952,6 +5953,36 @@
         ['xl/styles.xml', estilos], ['xl/worksheets/sheet1.xml', hoja]
       ]);
     }
+    // listado de mastitis por lactancia (nov 2026): vacas activas con mastitis en la lactancia actual, con el último tratamiento
+    function filasMastitis(ref) {
+      var H = DB.hist || {}, F = [];
+      DB.animales.forEach(function (a) {
+        if (a.cat && a.cat !== 'vaca' && a.cat !== 'seca') return;
+        var h = H[a.rp]; if (!h || !h.sa || !h.pa || !h.pa.length) return;
+        var lp = h.pa[h.pa.length - 1], M = h.sa.filter(function (e) { return e[1] === 'M' && e[0] >= lp[0]; });
+        if (!M.length) return;
+        var n = 0, ult = null; M.forEach(function (e) { if (!ult || A.diffDays(e[0], ult) > 14) n++; ult = e[0]; });
+        var u = M[M.length - 1];
+        F.push({ a: a, parto: lp[0], del: A.diffDays(ref, lp[0]), casos: n, f: u[0], cuarto: (function (t) { var q = /\b([ap])\.?\s?([id])\b\.?/i.exec(t || ''); return q ? (q[1] + '.' + q[2] + '.').toUpperCase() : t || ''; })(u[2]), droga: u[3] || '', delT: A.diffDays(u[0], lp[0]) });
+      });
+      return F.sort(function (x, y) { return numRp(x.a, y.a); });
+    }
+    function listadoMastitis() {
+      var ref = today(), F = filasMastitis(ref);
+      if (!F.length) { toast('No hay vacas con mastitis en la lactancia actual.'); return; }
+      var fx = function (d) { return d ? A.fmt(d) : ''; };
+      var filas = F.map(function (r) { return [/^\d+$/.test(r.a.rp) ? +r.a.rp : r.a.rp, r.a.cat === 'seca' ? 'Seca' : 'Ordeñe', fx(r.parto), r.del, r.casos, fx(r.f), r.cuarto, r.droga, r.delT]; });
+      var blob = xlsxSimple('Mastitis', ['Caravana', 'Estado', 'Último parto', 'Días de lactancia', 'Casos en la lactancia', 'Último tratamiento', 'Cuarto', 'Droga', 'Días de lactancia al tratarse'], filas, [11, 9, 13, 10, 11, 14, 18, 30, 12]);
+      var nombre = ('Mastitis ' + (PERFIL.nombre || '') + ' ' + ref).replace(/[\\/:*?"<>|]+/g, '').trim() + '.xlsx', file = null;
+      try { file = new File([blob], nombre, { type: blob.type }); } catch (e) {}
+      state.xout = { blob: blob, file: file, csv: null, nombre: nombre };
+      $('#sheetXTitle').textContent = 'Mastitis por lactancia · ' + F.length + (F.length === 1 ? ' vaca' : ' vacas');
+      $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 6px">Vacas activas con mastitis en la lactancia actual: último parto, días de lactancia hoy, casos en la lactancia (registros dentro de 14 días son el mismo caso) y el último tratamiento con su fecha, cuarto, droga y días de lactancia en que se trató.</p>' +
+        '<div class="xprev">' + F.map(function (r) { return '<div><b>' + esc(r.a.rp) + '</b><span>' + esc(A.fmt(r.f) + ' · ' + r.delT + ' días' + (r.droga ? ' · ' + r.droga : '') + (r.casos > 1 ? ' · ' + r.casos + ' casos' : '')) + '</span></div>'; }).join('') + '</div><p class="cap">Archivo: ' + esc(nombre) + '</p>';
+      var puede = !!(navigator.share && file);
+      $('#xbtns').innerHTML = (puede ? '<button class="btn primary big" data-a="xshare">Compartir Excel (WhatsApp, mail…)</button>' : '') + '<button class="btn' + (puede ? '' : ' primary big') + '" data-a="xsave">Guardar Excel en el teléfono</button><button class="btn" data-a="xcancel">Cerrar</button>';
+      $('#sheetX').hidden = false;
+    }
     // ID de trazabilidad para el bastón: 858 0000 + los últimos 8 números del ID electrónico
     function idTraz(a) { var d = String(a.idElec || '').replace(/\D/g, ''); return d.length >= 8 ? '8580000' + d.slice(-8) : ''; }
     function planillaBaston(refV) {
@@ -6185,6 +6216,7 @@
       else if (a === 'ixtoros') { state.idxToro = null; render(); }
       else if (a === 'mastv') { state.mastVista = b.dataset.mv; render(); }
       else if (a === 'mastc') { state.mastCont = b.dataset.mc; render(); }
+      else if (a === 'mastxls') listadoMastitis();
       else if (a === 'tzsel') { state.tzSel = state.tzSel === b.dataset.tzf ? null : b.dataset.tzf; render(); }
       else if (a === 'ajustes') openSheet('Ajustes');
       else if (a === 'cerrar') closeSheet();
