@@ -3751,11 +3751,16 @@
         if (!servLac && desdeParto != null && a.cat !== 'vaquillona') {
           col = desdeParto > SIN_SERV_ROJO ? 'vacia' : 'apta';
           tit = 'Parida hace ' + desdeParto + ' días, sin servicio'; sub = ultT;
+          grid = casi([['Parto', A.fmt(a.pFecha).slice(0, 5)], ['Lactancia', a.pN ? a.pN + '.ª' : ''], ['Último tacto', a.tFecha && a.tFecha >= a.pFecha ? A.fmt(a.tFecha).slice(0, 5) + (a.result ? ' · ' + esc(a.result) : '') : 'sin tacto']]);
         } else if (!servLac) {
           col = 'sin'; tit = 'Sin servicio'; sub = ultT || (h && h.fn ? edadTxt(h.fn, t) : '');
         } else {
           col = a.estado === 'vacia' ? 'vacia' : a.estado === 'ciclando' ? 'ciclando' : a.estado === 'apta' ? 'apta' : 'sin';
-          tit = labelOf(a); sub = [a.tFecha ? 'Último tacto ' + A.fmt(a.tFecha).slice(0, 5) : '', a.sN ? a.sN + (a.sN === 1 ? ' servicio' : ' servicios') + ', el último ' + sv.replace(/ · \d+\.(er|º) servicio$/, '') : ''].filter(Boolean).join(' · ');
+          // casilleros como preñada y servida (opción B, nov 2026): vacía con los días desde el tacto
+          var dT = a.tFecha ? A.diffDays(t, a.tFecha) : null;
+          tit = a.estado === 'vacia' && dT != null && dT >= 0 ? 'Vacía hace ' + dT + (dT === 1 ? ' día' : ' días') : labelOf(a);
+          grid = casi([['Servicio', servF], ['Toro', toroF], ['Tacto', a.tFecha ? A.fmt(a.tFecha).slice(0, 5) + (a.estado !== 'vacia' && a.result ? ' · ' + esc(a.result) : '') : '']]);
+          sub = [a.tFecha ? 'Último tacto ' + A.fmt(a.tFecha).slice(0, 5) : '', a.sN ? a.sN + (a.sN === 1 ? ' servicio' : ' servicios') + ', el último ' + sv.replace(/ · \d+\.(er|º) servicio$/, '') : ''].filter(Boolean).join(' · ');
         }
       }
       // descarte: el motivo es lo primero; el estado reproductivo baja a la línea chica
@@ -3763,7 +3768,10 @@
         var mot = a.rechDet || a.rech;
         sub = [tit, sub].filter(Boolean).join(' · ');
         col = 'vacia'; tit = 'Descarte' + (mot ? ' por ' + String(mot).toLowerCase() : '');
-        extra = ''; grid = '';
+        // opción B2 (nov 2026): motivo en el título; casilleros desde, último servicio y tacto
+        var dD = a.dFecha ? A.diffDays(t, a.dFecha) : null, servD = a.sFecha && (!a.pFecha || a.sFecha > a.pFecha) && !/^celo/i.test(a.toro || '') ? A.fmt(a.sFecha).slice(0, 5) + (a.sFecha.slice(0, 4) !== String(t).slice(0, 4) ? '/' + a.sFecha.slice(2, 4) : '') : '';
+        extra = ''; grid = '<div class="fgrid">' + [['Desde', a.dFecha ? A.fmt(a.dFecha).slice(0, 5) + (dD != null && dD >= 0 ? ' · ' + dD + ' d' : '') : ''], ['Último servicio', servD], [a.tFecha ? 'Tacto ' + A.fmt(a.tFecha).slice(0, 5) : 'Tacto', a.tFecha ? esc(a.result || '') || '–' : 'sin tacto']].filter(function (x) { return x[1]; }).map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join('') + '</div>';
+        if (grid === '<div class="fgrid"></div>') grid = '';
       }
       return '<section class="fest" style="--c:var(--' + col + ')"><div class="ftit">' + tit + '</div>' + (grid || (sub ? '<div class="fsub">' + sub + '</div>' : '')) + extra + '</section>';
     }
@@ -3820,7 +3828,7 @@
       return '<button class="backbtn" data-a="back"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>' +
         // debajo de la caravana, una sola palabra: ordeñe, seca, vaquillona o ternera
         '<header class="fh"><div class="fhtag">' + tagSVG(a.rp, 118) + '<div class="fhlote" style="text-align:center;margin-top:6px;max-width:118px;font-size:15px;font-weight:700;line-height:1.2">' + (enPreparto(a) ? 'Preparto' : ({ vaca: 'Ordeñe', seca: 'Seca', vaquillona: 'Vaquillona', ternera: 'Ternera' }[a.cat] || '')) + '</div>' + (a.pN > 0 && a.cat !== 'vaquillona' && a.cat !== 'ternera' ? '<div class="fhlac" style="text-align:center;max-width:118px;margin-top:1px;font-size:14px;font-weight:500;color:var(--muted)">' + a.pN + 'ª lactancia</div>' : '') + '</div><div class="fhinfo"><div class="nm">' + esc(a.nombre || 'Sin nombre') + '</div>' +
-        '<div class="fhchips">' + chip(a) + (repetidora(a) ? SELLO_REP : '') + (a.rech ? '<span class="chip descarte">Descarte</span>' : '') + (!esOperario() && paraVenta(a) ? '<span class="chip venta2">Para venta</span>' : '') + (atrasoFicha(a) ? '<span class="chip venta2">Parto atrasado</span>' : '') + '</div></div>' + idxBadge(a) + '</header>' +
+        '<div class="fhchips">' + chip(a) + (repetidora(a) ? SELLO_REP : '') + (a.rech && (a.cat === 'ternera' || atrasoFicha(a)) ? '<span class="chip descarte">Descarte</span>' : '') + (!esOperario() && paraVenta(a) ? '<span class="chip venta2">Para venta</span>' : '') + (atrasoFicha(a) ? '<span class="chip venta2">Parto atrasado</span>' : '') + '</div></div>' + idxBadge(a) + '</header>' +
         fest + (datos ? '<section class="card datos">' + datos + '</section>' : '') +
         (h && h.ct.length ? '<section class="card"><h2>Control lechero</h2>' + prodHistHTML(a, h) + '</section>' : (bars(a.pr || []) ? '<section class="card"><h2>Control lechero</h2>' + bars(a.pr) + '</section>' : '')) +
         (h ? lactHTML(h) + (h.pa.length || h.ev.length || h.ta.length ? histHTML(a, h) : '') + sanidadHTML(h) + ccHTML(h) : '') +
