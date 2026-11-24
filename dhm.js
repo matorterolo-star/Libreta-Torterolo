@@ -21,8 +21,9 @@
   var cmp = function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; };
   // 3: vacía deducida. DHM guarda solo las preñeces: en un tacto, la servida que no figura preñada quedó vacía
   var CODES = { 1: ['Preñada', 'Preñada', '2'], 2: ['Vacía', 'Vacía', '1'], 3: ['Vacía (deducida del tacto)', 'Vacía', '1'] };
-  // diagnósticos de examen genital que indican vacía (vacía, vacía cicla, anestro, quiste, endometritis, vacía ciclando)
-  var DIAG_VACIA = { 2: 1, 3: 1, 4: 1, 6: 1, 7: 1, 8: 1, 9: 1 };
+  // examen genital (nov 2026): solo "vacía" es diagnóstico de vacía; apta, ciclando, anestro, quiste, endometritis, metritis…
+  // van con su nombre (código 100 + id del diagnóstico de DHM), sin preñez, como los códigos de tacto de SysCaw
+  var DIAG_TACTO = /apta|cicl|anestr|quist|endometr|metrit|piometr|involuc|urovag|prolap|vac/i;
 
   // ¿es una base de Access (Jet 3/4 o ACE)?
   function es(buf) {
@@ -93,6 +94,7 @@
 
   // sel: ids de los establecimientos a cargar (null: todos los que tienen hembras activas)
   function build(D, opts) {
+    var codes = {}; Object.keys(CODES).forEach(function (k) { codes[k] = CODES[k]; });
     opts = opts || {};
     var us = opts.unidades || unidades(D), sel = {};
     (opts.sel && opts.sel.length ? opts.sel : us.map(function (u) { return u.id; })).forEach(function (id) { sel[id] = 1; });
@@ -112,14 +114,16 @@
     var claveToro = function (s) { return tx(s).toUpperCase().replace(/[^A-Z0-9ÑÁÉÍÓÚÜ]/g, ''); };
     var servs = T('DHM_Servicios', ['Ser_IdServicio', 'Ani_IdAnimal', 'Ser_Fecha', 'Ser_IdToro', 'Ser_HBAToro', 'Ser_ApodoToro', 'Ser_IdInseminador', 'Tse_IdTipoServicio', 'Est_IdEstablecimiento']);
     var nomToro = function (s) {
-      var t = tx(s.Ser_ApodoToro), b = A[s.Ser_IdToro];
-      if (!t || t === '0') t = b ? tx(b.Ani_Apodo) || tx(b.Ani_Nombre) || tx(b.Ani_RP) : '';
+      var t = tx(s.Ser_ApodoToro), b = A[s.Ser_IdToro], bn = b ? tx(b.Ani_Apodo) || tx(b.Ani_Nombre) || tx(b.Ani_RP) : '';
+      // el servicio a veces trae solo el número del toro ("16956") y la ficha del toro el nombre completo ("16956 SUNSEEKER"): manda la ficha
+      if (bn && bn !== '0' && (!t || t === '0' || /^\d+$/.test(t) || claveToro(bn).indexOf(claveToro(t)) >= 0)) t = bn;
       if (!t || t === '0') t = tx(s.Ser_HBAToro) !== '0' ? tx(s.Ser_HBAToro) : '';
       if (!t && s.Tse_IdTipoServicio === 2) t = 'Toro (campo)';
       return t;
     };
     servs.forEach(function (s) { var t = nomToro(s), k = claveToro(t); if (!k) return; s._k = k; var c = torF[k] || (torF[k] = {}); c[t] = (c[t] || 0) + 1; });
-    Object.keys(torF).forEach(function (k) { var c = torF[k], best = null; Object.keys(c).forEach(function (t) { if (!best || c[t] > c[best] || (c[t] === c[best] && t.length > best.length)) best = t; }); torN[k] = best; });
+    Object.keys(torF).forEach(function (k) { var c = torF[k], best = null; Object.keys(c).forEach(function (t) { if (!best || c[t] > c[best] || (c[t] === c[best] && t.length > best.length)) best = t; }); torN[k] = best.replace(/^\d+[\s.\-]*(?=[A-Za-zÑñ])/, '').trim() || best; });
+    // el número con que el programa identifica al toro va adelante del nombre ("16956 SUNSEEKER"): se saca; si el nombre es solo el número, queda
     var toroDe = function (s) { return s && s._k ? torN[s._k] : ''; };
     var sById = {}; servs.forEach(function (s) { sById[s.Ser_IdServicio] = s; });
     var pid = function (id) { return A[id] ? (A[id].Ani_Apodo || A[id].Ani_Nombre || A[id].Ani_RP) : null; };
@@ -129,9 +133,11 @@
     var visto = {}, unico = function (tipo, id, f) { var k = tipo + '|' + id + '|' + f; if (visto[k]) return false; visto[k] = 1; return true; };
     // historial por hembra
     var G = {}, maxF = '0000';
-    var g = function (id) { return G[id] || (G[id] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [] }); };
+    var g = function (id) { return G[id] || (G[id] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sa: [] }); };
     var ver = function (f) { if (f && f > maxF) maxF = f; };
-    servs.forEach(function (s) { if (!mio[s.Ani_IdAnimal]) return; var f = fch(s.Ser_Fecha); if (!f || !unico('S', s.Ani_IdAnimal, f)) return; ver(f); g(s.Ani_IdAnimal).ev.push([f, 'S', toroDe(s), null, s.Ser_IdServicio, s.Est_IdEstablecimiento]); });
+    // inseminador: el id del servicio apunta a la tabla de personas de DHM (DHM_Propietarios); nombre con mayúscula inicial
+    var insN = {}; T('DHM_Propietarios', ['Pro_IdPropietario', 'Pro_Nombre']).forEach(function (p) { var n = tx(p.Pro_Nombre); if (n) insN[p.Pro_IdPropietario] = n.toLowerCase().replace(/(^|[\s.\-])([a-záéíóúñü])/g, function (m, a, b) { return a + b.toUpperCase(); }); });
+    servs.forEach(function (s) { if (!mio[s.Ani_IdAnimal]) return; var f = fch(s.Ser_Fecha); if (!f || !unico('S', s.Ani_IdAnimal, f)) return; ver(f); g(s.Ani_IdAnimal).ev.push([f, 'S', toroDe(s), s.Ser_IdInseminador != null ? insN[s.Ser_IdInseminador] || null : null, s.Ser_IdServicio, s.Est_IdEstablecimiento]); });
     T('DHM_Celos', ['Ani_IdAnimal', 'Cel_Fecha']).forEach(function (c) { if (!mio[c.Ani_IdAnimal]) return; var f = fch(c.Cel_Fecha); if (!f || !unico('C', c.Ani_IdAnimal, f)) return; ver(f); g(c.Ani_IdAnimal).ev.push([f, 'C', '', null]); });
 
     // partos y lactancias (una lactancia puede empezar con un aborto avanzado)
@@ -169,10 +175,39 @@
       var o = ses[k] || (ses[k] = { n: 0, d: [] }); o.n++; if (ds != null && ds > 0) o.d.push(ds);
       if (!mio[p.Ani_IdAnimal] || !unico('P', p.Ani_IdAnimal, f)) return; ver(f); g(p.Ani_IdAnimal).ta.push([f, 1]);
     });
-    T('DHM_ExamenesGenitales', ['Ani_IdAnimal', 'Ege_Fecha', 'Dia_IdDiagnosticoOvario', 'Dia_IdDiagnosticoUtero']).forEach(function (e) {
+    var diag = {}, medic = {};
+    T('DHM_Diagnosticos', ['Dia_IdDiagnostico', 'Dia_Descripcion']).forEach(function (d) { diag[d.Dia_IdDiagnostico] = frase(d.Dia_Descripcion); });
+    T('DHM_Medicamentos', ['Med_IdMedicamento', 'Med_Descripcion']).forEach(function (m) { var n = tx(m.Med_Descripcion); if (n) medic[m.Med_IdMedicamento] = n; });
+    var codDiag = function (id) {
+      var n = diag[id]; if (!n || !DIAG_TACTO.test(n)) return null;
+      if (/^vac[ií]a$/i.test(n)) return 2;
+      if (!codes[100 + id]) codes[100 + id] = [n, n, '1'];
+      return 100 + id;
+    };
+    T('DHM_ExamenesGenitales', ['Ani_IdAnimal', 'Ege_Fecha', 'Dia_IdDiagnosticoOvario', 'Dia_IdDiagnosticoUtero', 'Med_IdMedicamento']).forEach(function (e) {
       var f = fch(e.Ege_Fecha); if (!mio[e.Ani_IdAnimal] || !f) return;
-      if (DIAG_VACIA[e.Dia_IdDiagnosticoOvario] || DIAG_VACIA[e.Dia_IdDiagnosticoUtero]) { ver(f); g(e.Ani_IdAnimal).ta.push([f, 2]); }
+      // el diagnóstico de ovario manda; si vacía figura en cualquiera de los dos, es vacía
+      var co = codDiag(e.Dia_IdDiagnosticoOvario), cu = codDiag(e.Dia_IdDiagnosticoUtero), c = co === 2 || cu === 2 ? 2 : co || cu;
+      if (!c) return;
+      var dr = e.Med_IdMedicamento ? medic[e.Med_IdMedicamento] : null;
+      ver(f); g(e.Ani_IdAnimal).ta.push(dr ? [f, c, dr] : [f, c]);
     });
+    // sanidad (nov 2026): [fecha, tipo, detalle, tratamiento]; M mastitis, U otra de ubre (manca, CMT), S secado, P patas, E otro evento sanitario
+    var san = function (tabla, pre, tipo) {
+      T(tabla, ['Ani_IdAnimal', pre + '_Fecha', 'Dia_IdDiagnostico', 'Med_IdMedicamento', 'Tes_IdTipoEvSanitario']).forEach(function (r) {
+        var f = fch(r[pre + '_Fecha']); if (!mio[r.Ani_IdAnimal] || !f) return;
+        var d = diag[r.Dia_IdDiagnostico] || (r.Tes_IdTipoEvSanitario != null ? tesan[r.Tes_IdTipoEvSanitario] : '') || '', m = r.Med_IdMedicamento ? medic[r.Med_IdMedicamento] || null : null;
+        var t = typeof tipo === 'function' ? tipo(d) : tipo;
+        if (t === 'S' && !m) return;
+        g(r.Ani_IdAnimal).sa.push([f, t, d || null, m]);
+      });
+    };
+    var tesan = {}; T('DHM_TiposEvSanitarios', ['Tes_IdTipoEvSanitario', 'Tes_Descripcion']).forEach(function (t) { tesan[t.Tes_IdTipoEvSanitario] = frase(t.Tes_Descripcion); });
+    san('DHM_EnfermedadesUbre', 'Ubr', function (d) { return !d || /mastit/i.test(d) ? 'M' : 'U'; });
+    san('DHM_Secados', 'Sec', 'S');
+    san('DHM_EnfermedadesPatas', 'Pat', 'P');
+    san('DHM_EvSanitarios', 'Evs', 'E');
+    Object.keys(G).forEach(function (id) { G[id].sa.sort(cmp); });
     // bajas
     var desc = {}; T('DHM_Descartes', ['Ani_IdAnimal', 'Des_Fecha', 'Tde_IdTipoDescarte', 'Mde_IdMotivoDescarte', 'Des_Observaciones', 'Est_IdEstablecimiento']).forEach(function (d) { var f = fch(d.Des_Fecha), x = desc[d.Ani_IdAnimal]; if (!x || (f || '') >= (x.f || '')) desc[d.Ani_IdAnimal] = { f: f, t: d.Tde_IdTipoDescarte, m: d.Mde_IdMotivoDescarte, o: d.Des_Observaciones, u: d.Est_IdEstablecimiento }; });
     var motivo = {}; T('DHM_MotivosDescarte', ['Mde_IdMotivoDescarte', 'Mde_Descripcion']).forEach(function (m) { motivo[m.Mde_IdMotivoDescarte] = frase(m.Mde_Descripcion); });
@@ -255,7 +290,7 @@
       x.ct = desde ? x.ct.filter(function (c) { return c[0] >= desde; }) : [];
     });
 
-    var animales = [], hist = {}, bajas = [], vacio = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [] }, usados = {};
+    var animales = [], hist = {}, bajas = [], vacio = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sa: [] }, usados = {};
     var pa2 = function (P) { return P.filter(function (p) { return !/^A/.test(p[2] || ''); }).map(function (p) { return [p[0], p[5] || null]; }); }, VL = [];
     // caravana única: si hembras de distintas unidades comparten el RP, se agrega la unidad
     var uDeRp = {}; anim.forEach(function (a) { if (mio[a.Ani_IdAnimal] && a.Ean_IdEstadoAnimal === 1) { var r = rpDe(a.Ani_IdAnimal); if (r) (uDeRp[r] = uDeRp[r] || {})[a.Est_IdEstablecimiento] = 1; } });
@@ -277,7 +312,7 @@
         if (bF >= desdeHist) {
           var paB = x.pa.filter(function (p) { return p[0] >= desdeHist; }); if (!paB.length && x.pa.length) paB = [x.pa[x.pa.length - 1]];
           var dB = paB.length ? paB[0][0] : '0000', dE = function (e) { return e[0] >= dB; }, nros = paB.map(function (p) { return p[1]; });
-          hist[key] = { mv: mvBy[id] || null, pa: paB, ev: x.ev.filter(dE), ta: x.ta.filter(dE), la: x.la.filter(function (l) { return nros.indexOf(l[0]) >= 0; }), ct: x.ct.filter(dE), ab: x.ab.filter(function (f) { return f >= dB; }), ult: true, fn: fn, ma: ma, pd: pd, vit: a.Ani_ProduccionVitalicia > 0 ? Math.round(a.Ani_ProduccionVitalicia) : null };
+          hist[key] = { mv: mvBy[id] || null, pa: paB, ev: x.ev.filter(dE), ta: x.ta.filter(dE), la: x.la.filter(function (l) { return nros.indexOf(l[0]) >= 0; }), ct: x.ct.filter(dE), sa: x.sa.filter(dE), ab: x.ab.filter(function (f) { return f >= dB; }), ult: true, fn: fn, ma: ma, pd: pd, vit: a.Ani_ProduccionVitalicia > 0 ? Math.round(a.Ani_ProduccionVitalicia) : null };
         } else hist[key] = { pa: [], ev: [], ta: [], la: [], ct: [], fn: fn, ma: ma, pd: pd, vit: null, corto: true };
         return;
       }
@@ -290,7 +325,7 @@
       var evs = x.ev.filter(function (e) { return e[0] > lpf; }), sv = evs.filter(function (e) { return e[1] === 'S'; });
       var le = evs.length ? evs[evs.length - 1] : null;
       var tas = x.ta.filter(function (t) { return t[0] >= lpf; }), lt = tas.length ? tas[tas.length - 1] : null;
-      var cd = lt ? CODES[lt[1]] : null, res = cd ? cd[1] : null, preg = !!(cd && cd[2] === '2'), conc = null;
+      var cd = lt ? codes[lt[1]] : null, res = cd ? cd[1] : null, preg = !!(cd && cd[2] === '2'), conc = null;
       if (preg) { var s2 = sv.filter(function (e) { return e[0] <= lt[0]; }); conc = s2.length ? s2[s2.length - 1][0] : null; }
       // aborto después del último tacto (o del último servicio): vacía, con resultado "Aborto" en la fecha del aborto
       var abL = x.ab.filter(function (f) { return f > lpf; }).pop();
@@ -310,7 +345,7 @@
         dLac: lp && (cat === 'vaca' || cat === 'seca') ? diffDays(ref, lp[0]) : null,
         prodLts: curLac ? curLac[1] : null, mej: mejs.length ? Math.max.apply(null, mejs) : null
       });
-      hist[rp] = { mv: mvBy[id] || null, ec: null, pa: x.pa, ev: x.ev, ta: x.ta, la: x.la, ct: x.ct, ab: x.ab, fn: fn, ma: ma, pd: pd, vit: a.Ani_ProduccionVitalicia > 0 ? Math.round(a.Ani_ProduccionVitalicia) : null };
+      hist[rp] = { mv: mvBy[id] || null, ec: null, pa: x.pa, ev: x.ev, ta: x.ta, la: x.la, ct: x.ct, sa: x.sa.length ? x.sa : null, ab: x.ab, fn: fn, ma: ma, pd: pd, vit: a.Ani_ProduccionVitalicia > 0 ? Math.round(a.Ani_ProduccionVitalicia) : null };
     });
     animales.sort(function (p, q) { return p.rp.localeCompare(q.rp, 'es', { numeric: true }); });
     bajas.sort(function (p, q) { return (q.bFecha || '') < (p.bFecha || '') ? -1 : 1; });
@@ -318,7 +353,7 @@
     var elegidas = us.filter(function (u) { return sel[u.id]; });
     // nombre del tambo: el de la unidad, o la parte común de los nombres ("El Teson (MFajardo) T1" y "… T2" → "El Teson (MFajardo)")
     var tambo = elegidas.length === 1 ? elegidas[0].nombre : (function () { var ns = elegidas.map(function (u) { return u.nombre; }), p = ns[0] || ''; ns.forEach(function (n) { while (p && n.indexOf(p) !== 0) p = p.slice(0, -1); }); return p.replace(/[\s\-·,]+(T|U)?$/i, '').trim() || null; })();
-    return { vovsH: root.SysCaw && root.SysCaw.vovsHist ? root.SysCaw.vovsHist(VL, ref) : null, idProd: elegidas.map(function (u) { return u.nro; }), ctrls: ctrls, config: {}, animales: animales, bajas: bajas, hist: hist, codes: CODES, fecha: ref, desdeHist: desdeHist, tambo: tambo, conteoCat: cc, origen: 'dhm', unidades: elegidas, deducidas: nDed, fantasmas: fantasmas };
+    return { vovsH: root.SysCaw && root.SysCaw.vovsHist ? root.SysCaw.vovsHist(VL, ref) : null, idProd: elegidas.map(function (u) { return u.nro; }), ctrls: ctrls, config: {}, animales: animales, bajas: bajas, hist: hist, codes: codes, fecha: ref, desdeHist: desdeHist, tambo: tambo, conteoCat: cc, origen: 'dhm', unidades: elegidas, deducidas: nDed, fantasmas: fantasmas };
   }
 
   // opts.elegir(unidades) -> Promise<[ids]>: se llama si la base trae más de un establecimiento con hembras activas.
