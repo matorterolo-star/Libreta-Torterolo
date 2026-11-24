@@ -3,10 +3,13 @@
 (function (root) {
   'use strict';
   var GEST = 283;
-  var T = { MASTITIS: 1, PARTO: 4, SERVICIO: 5, SECADO: 6, ABORTO: 7, CELO: 8, TACTO: 9, CONTROL: 10, BAJA: 11, DESCARTE: 12, SANIDAD: 20 };
+  var T = { MASTITIS: 1, PARTO: 4, SERVICIO: 5, SECADO: 6, ABORTO: 7, CELO: 8, TACTO: 9, CONTROL: 10, BAJA: 11, DESCARTE: 12, CELULAS: 13, SANIDAD: 20 };
+  // CELULAS (13) = análisis de leche: GRASA, PROTEINA y RCS, con su propia fecha (no siempre el mismo día del control)
   // SANIDAD (20): otro evento sanitario; lo usan las bases armadas desde otros programas (p. ej. DairyPlan), con SANTIPO (P patas, U otra de ubre, E otro), DIAGNOSTICO y TRATAMIENTO
   // ESTADOVACA del control reproductivo: 1 preñada, 3 vacía (comprobado con los partos siguientes); el resto se muestra con su número
-  var ESTADOS = { 1: ['Preñada', 'Preñada', '2'], 2: ['Dudosa', 'Dudosa', ''], 3: ['Vacía', 'Vacía', '1'] };
+  var ESTADOS = { 1: ['Preñada', 'Preñada', '2'], 2: ['Dudosa', 'Dudosa', ''], 3: ['Vacía', 'Vacía', '1'], 9: ['Abortada', 'Abortada', '1'] };
+  // MOTIVODESCARTE: lista propia de FOSAPP (no es la tabla CausaBaja): 1 mastitis, 2 reproductivo (comprobado con las bajas posteriores)
+  var MOTDESC = { 1: 'Mastitis', 2: 'Reproductivo' };
   var pad = function (n) { return (n < 10 ? '0' : '') + n; };
   function P(s) { var a = s.split('-').map(Number); return Date.UTC(a[0], a[1] - 1, a[2]); }
   function diffDays(a, b) { return Math.round((P(a) - P(b)) / 864e5); }
@@ -78,7 +81,7 @@
       if (r[3] === 'M') toro[r[0]] = tx(r[5]) || tx(r[8]) || (r[1] ? String(r[1]) : '');
       else H.push({ g: r[0], rp: r[1] != null && String(r[1]).trim() !== '' ? String(r[1]).trim() : tx(r[8]), fn: fch(r[2]), est: r[4], ub: tx(r[6]).toUpperCase(), vl: r[7] || 0 });
     });
-    var G = {}; H.forEach(function (a) { G[a.g] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sec: [], baja: null, desc: null, ec: null, ctAll: [], sa: [] }; });
+    var G = {}; H.forEach(function (a) { G[a.g] = { pa: [], ev: [], ta: [], la: [], ct: [], ab: [], sec: [], baja: null, desc: null, ec: null, ctAll: [], sa: [], an: [] }; });
     var maxF = '0000';
     var partosH = [];
     filas(db, 'select EventoGUID, AnimalGUID, EventoFch, TipoEventoId from Evento where EventoEstadoId <> 2').forEach(function (r) {
@@ -94,6 +97,7 @@
       else if (t === T.CELO) g.ev.push([f, 'C', '', null]);
       else if (t === T.TACTO) { var e = D(id, 'ESTADOVACA', 'n'); if (e) g.ta.push([f, e]); }
       else if (t === T.CONTROL) { var l = (D(id, 'LITROSAM', 'n') || 0) + (D(id, 'LITROSPM', 'n') || 0); if (l > 0) g.ctAll.push([f, Math.round(l * 10) / 10, null, null, null]); }
+      else if (t === T.CELULAS) { var gr = D(id, 'GRASA', 'n'), pt = D(id, 'PROTEINA', 'n'), rc = D(id, 'RCS', 'n'); if (gr > 0 || pt > 0 || rc > 0) g.an.push([f, gr > 0 ? gr : null, pt > 0 ? pt : null, rc > 0 ? Math.round(rc) : null]); }
       else if (t === T.SECADO) { g.sec.push(f); var tr = D(id, 'TRATAMIENTO', 't'); if (tr) g.sa.push([f, 'S', null, tr]); }
       else if (t === T.MASTITIS) g.sa.push([f, 'M', D(id, 'DIAGNOSTICO', 't') || null, D(id, 'TRATAMIENTO', 't') || null]);
       else if (t === T.SANIDAD) g.sa.push([f, D(id, 'SANTIPO', 't') || 'E', D(id, 'DIAGNOSTICO', 't') || null, D(id, 'TRATAMIENTO', 't') || null]);
@@ -107,7 +111,9 @@
     // resumen de cada control lechero del tambo (todas las vacas, también las que después se fueron)
     var porF = {};
     H.forEach(function (a) {
-      var g = G[a.g]; g.ctAll.sort(cmp); g.pa.sort(cmp); g.ev.sort(cmp); g.ta.sort(cmp); g.sec.sort(); g.ab.sort();
+      var g = G[a.g]; g.ctAll.sort(cmp);
+      // análisis de leche al control más cercano de la vaca (hasta 10 días de diferencia)
+      g.an.sort(cmp).forEach(function (x) { var b = null, bd = 11; g.ctAll.forEach(function (c) { var d = Math.abs(diffDays(c[0], x[0])); if (d < bd) { bd = d; b = c; } }); if (b) { b[2] = x[1]; b[3] = x[2]; b[4] = x[3]; } }); g.pa.sort(cmp); g.ev.sort(cmp); g.ta.sort(cmp); g.sec.sort(); g.ab.sort();
       // número de lactancia: en el parto FOSAPP anota la lactancia que termina (0 = vaquillona), así que el parto abre esa + 1.
       // Se cuenta hacia atrás desde la lactancia actual del animal, que es la más confiable (a veces el dato del parto viene en 0)
       var n = g.pa.length, L = 0;
@@ -183,7 +189,7 @@
       // aborto después del último tacto (o del último servicio): vacía, con resultado "Aborto" en la fecha del aborto
       var abL = g.ab.filter(function (f) { return f > lpf; }).pop(), abV = false;
       if (abL && (!lt || abL >= lt[0])) { preg = false; conc = null; res = 'Aborto'; lt = [abL, null]; abV = true; }
-      var estado = preg ? 'prenada' : abV || (res && /^vac/i.test(res)) ? 'vacia' : res ? 'otro' : 'sin';
+      var estado = preg ? 'prenada' : abV || (cd && cd[2] === '1') || (res && /^vac/i.test(res)) ? 'vacia' : res ? 'otro' : 'sin';
       if (estado !== 'prenada' && le && le[1] === 'S' && (!lt || le[0] > lt[0])) estado = 'servida';
       var curLac = null; g.la.forEach(function (l) { if (lp && l[0] === lp[1]) curLac = l; });
       var mejs = g.la.map(function (l) { return l[2] || l[1]; }).filter(Boolean);
@@ -195,7 +201,7 @@
         pFecha: lp ? lp[0] : null, pN: lp ? lp[1] : null, r1: lp ? (lp[2].split('/')[0] || null) : null, r2: lp ? (lp[2].split('/')[1] || null) : null,
         sFecha: le ? le[0] : null, sN: le ? servs.length : null, toro: le ? (le[1] === 'C' ? 'Celo' : (le[2] || null)) : null,
         tFecha: lt ? lt[0] : null, result: res, partoProb: conc ? addDays(conc, GEST) : null, estado: estado,
-        u: 0, dFecha: desc ? desc[0] : null, rech: desc ? (causa[desc[1]] || 'Descarte') : null, rechDet: desc ? (causa[desc[1]] || null) : null, pr: pr, celo: estado === 'prenada' && !!le && le[1] === 'C',
+        u: 0, dFecha: desc ? desc[0] : null, rech: desc ? (MOTDESC[desc[1]] || 'Descarte') : null, rechDet: desc ? (MOTDESC[desc[1]] || null) : null, pr: pr, celo: estado === 'prenada' && !!le && le[1] === 'C',
         dLac: lp && (cat === 'vaca' || cat === 'seca') ? diffDays(ref, lp[0]) : null,
         prodLts: curLac ? curLac[1] : null, mej: mejs.length ? Math.max.apply(null, mejs) : null
       });
