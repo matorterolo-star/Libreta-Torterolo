@@ -3749,8 +3749,10 @@
         var servLac = a.sFecha && (!a.pFecha || a.sFecha > a.pFecha) && !/^celo/i.test(a.toro || '');
         var ultT = a.tFecha ? 'Último tacto ' + A.fmt(a.tFecha).slice(0, 5) + (a.result ? ' · ' + esc(a.result) : '') : '';
         if (!servLac && desdeParto != null && a.cat !== 'vaquillona') {
-          col = desdeParto > SIN_SERV_ROJO ? 'vacia' : 'apta';
-          tit = 'Parida hace ' + desdeParto + ' días, sin servicio'; sub = ultT;
+          // dentro de la espera voluntaria del tambo + 20 días todavía es normal no tener servicio: solo "Parida hace N días", en gris (opción A, nov 2026)
+          var enEspera = desdeParto <= pevActual() + 20;
+          col = enEspera ? 'sin' : desdeParto > SIN_SERV_ROJO ? 'vacia' : 'apta';
+          tit = 'Parida hace ' + desdeParto + (desdeParto === 1 ? ' día' : ' días') + (enEspera ? '' : ', sin servicio'); sub = ultT;
           grid = casi([['Parto', A.fmt(a.pFecha).slice(0, 5)], ['Lactancia', a.pN ? a.pN + '.ª' : ''], ['Último tacto', a.tFecha && a.tFecha >= a.pFecha ? A.fmt(a.tFecha).slice(0, 5) + (a.result ? ' · ' + esc(a.result) : '') : 'sin tacto']]);
         } else if (!servLac) {
           col = 'sin'; tit = 'Sin servicio'; sub = ultT || (h && h.fn ? edadTxt(h.fn, t) : '');
@@ -3770,7 +3772,7 @@
         col = 'vacia'; tit = 'Descarte' + (mot ? ' por ' + String(mot).toLowerCase() : '');
         // opción B2 (nov 2026): motivo en el título; casilleros desde, último servicio y tacto
         var dD = a.dFecha ? A.diffDays(t, a.dFecha) : null, servD = a.sFecha && (!a.pFecha || a.sFecha > a.pFecha) && !/^celo/i.test(a.toro || '') ? A.fmt(a.sFecha).slice(0, 5) + (a.sFecha.slice(0, 4) !== String(t).slice(0, 4) ? '/' + a.sFecha.slice(2, 4) : '') : '';
-        extra = ''; grid = '<div class="fgrid">' + [['Desde', a.dFecha ? A.fmt(a.dFecha).slice(0, 5) + (dD != null && dD >= 0 ? ' · ' + dD + ' d' : '') : ''], ['Último servicio', servD], [a.tFecha ? 'Tacto ' + A.fmt(a.tFecha).slice(0, 5) : 'Tacto', a.tFecha ? esc(a.result || '') || '–' : 'sin tacto']].filter(function (x) { return x[1]; }).map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join('') + '</div>';
+        extra = ''; grid = '<div class="fgrid">' + [[a.dFecha ? 'Desde ' + A.fmt(a.dFecha).slice(0, 5) : 'Desde', a.dFecha ? (dD != null && dD >= 0 ? dD + (dD === 1 ? ' día' : ' días') : A.fmt(a.dFecha).slice(0, 5)) : ''], ['Último servicio', servD], [a.tFecha ? 'Tacto ' + A.fmt(a.tFecha).slice(0, 5) : 'Tacto', a.tFecha ? esc(a.result || '') || '–' : 'sin tacto']].filter(function (x) { return x[1]; }).map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join('') + '</div>';
         if (grid === '<div class="fgrid"></div>') grid = '';
       }
       return '<section class="fest" style="--c:var(--' + col + ')"><div class="ftit">' + tit + '</div>' + (grid || (sub ? '<div class="fsub">' + sub + '</div>' : '')) + extra + '</section>';
