@@ -1381,7 +1381,7 @@
       // cada lista arranca plegada: título y cantidad; se despliega tocando el título
       var desp = !!(state.desp && state.desp[key]);
       var ds = descDe(key);
-      var h = '<section class="sec' + (desp ? ' open' : '') + '"><button class="sechead" data-desp="' + key + '" aria-expanded="' + desp + '"><span class="pttl"><h2>' + titulo + '</h2>' + (ds ? '<small class="pdesc">' + esc(ds) + '</small>' : '') + '</span><span class="count">' + (cnt != null ? cnt : items.length) + '</span>' +
+      var h = '<section class="sec' + (desp ? ' open' : '') + '"><button class="sechead" data-desp="' + key + '" aria-expanded="' + desp + '"><span class="pttl"><h2>' + titulo + (key === 'atrasados' ? ' ' + VTAG : '') + '</h2>' + (ds ? '<small class="pdesc">' + esc(ds) + '</small>' : '') + '</span><span class="count">' + (cnt != null ? cnt : items.length) + '</span>' +
         '<svg class="chev" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
       if (!desp) return h + '</section>';
       h += (nota ? (nota.charAt(0) === '<' ? nota : '<p class="secnote">' + nota + '</p>') : '');
@@ -1576,7 +1576,7 @@
       }).join('') + '</div>';
       var GT = [], grp = function (t, html) { if (html) GT.push([t, html]); return ''; };
       var lrow = function (a, t, d) { return '<button class="lrow" data-a="' + a + '"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="pttl"><h2>' + t + '</h2><small class="pdesc">' + d + '</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'; };
-      return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + grp('Para hacer',
+      return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana ' + VTAG + '</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + grp('Para hacer',
         (function () {
           var rowT = function (x) { return rowHTML(x.a, { right: '<span class="when late">hace ' + x.dias + ' días</span>', sub: 'Servicio ' + A.fmt(x.fecha) + (x.a.toro && !/^celo/i.test(x.a.toro) ? ' · ' + esc(x.a.toro) : '') }); };
           var nota = 'Servidas hace ' + A.DX_MIN + ' días o más, sin tacto posterior.';
@@ -1596,7 +1596,7 @@
             return rowHTML(x.a, { right: '<span class="when late">' + x.d + ' días</span>', sub: 'Parto probable ' + A.fmt(x.pp) + (x.a.tFecha ? ' · tacto ' + A.fmt(x.a.tFecha) : '') });
           }, 'No hay partos atrasados.');
         })() : '')) +
-        grp('Listas para llevar', lrow('exptodos', 'Listado de animales', 'Todos, por categoría: estado, servicio, leche y descarte') + lrow('exptactar', 'Lista para revisación', 'Tacto, secado y venta, con todos los datos') + lrow('expparches', 'Listado de parches', 'Servidas entre X e Y días, paridas y vacías') + (esVet() ? lrow('expplanilla', 'Planilla de tacto', 'Vacas en ordeñe por caravana, para anotar en el corral') : '')) +
+        grp('Listas para llevar', lrow('exptodos', 'Listado de animales', 'Todos, por categoría: estado, servicio, leche y descarte') + lrow('exptactar', 'Lista para revisación', 'Tacto, secado y venta, con todos los datos') + lrow('expparches', 'Listado de parches', 'Servidas entre X e Y días, paridas y vacías') + (esVet() ? lrow('expplanilla', 'Planilla de tacto ' + VTAG, 'Vacas en ordeñe por caravana, para anotar en el corral') : '')) +
         grp('Gestión', secTareas('venta', 'Para venta', '<p class="secnote">Criterio: ' + esc(vtaTxt()) + '. <button class="lnk" data-a="vtacfg">Cambiar criterio</button></p>', DB.animales.filter(paraVenta).sort(function (x, y) { return x.pr[0] - y.pr[0]; }), function (a) {
           return rowHTML(a, { right: '<span class="vta">VENTA</span>', sub: nf(a.pr[0], 1) + ' lts · ' + nf(delDe(a)) + ' días en leche' + (a.rech ? ' · ' + esc(a.rechDet || a.rech) : '') });
         }, 'Ninguna vaca cumple el criterio de venta.') + insHTML()) +
@@ -1863,6 +1863,7 @@
       return S;
     }
     function guacheraHTML() {
+      if (!esVet() || esOperario()) return ''; // por ahora solo en el modo veterinario (nov 2026)
       if (esOperario() || !DB.animales.length) return '';
       var G = guacheraDatos(); if (!G.partos.length) return '';
       if (!state.gCr) state.gCr = +getP('gcr') || 60;
@@ -2246,7 +2247,7 @@
         : (K.ts != null && K.ts < 60) && !(K.tc != null && K.tc < 45) ? 'Preñez ' + pc(c.pren, c.aptas) + ' %: la concepción está bien, faltó servir vacas.'
         : !(K.ts != null && K.ts < 60) ? 'Preñez ' + pc(c.pren, c.aptas) + ' %: se sirvió bien, pero quedaron pocas preñadas.'
         : 'Preñez ' + pc(c.pren, c.aptas) + ' %: fallan la tasa de servicio y la concepción.';
-      return '<div class="c21pq ' + K.col + '"><div class="c21h"><b>¿Por qué ' + (K.col === 'ok' ? 'está en verde' : K.col === 'at' ? 'está en amarillo' : K.col === 'mal' ? 'está en rojo' : 'está en gris') + ' el ciclo ' + c.n + '?</b><small>' + A.fmt(c.ini).slice(0, 5) + ' al ' + A.fmt(c.fin).slice(0, 5) + '</small></div><p class="c21res">' + res + '</p>' +
+      return '<div class="c21pq ' + K.col + '"><div class="c21h"><b>¿Por qué ' + (K.col === 'ok' ? 'está en verde' : K.col === 'at' ? 'está en amarillo' : K.col === 'mal' ? 'está en rojo' : 'está en gris') + ' el ciclo ' + c.n + '? ' + VTAG + '</b><small>' + A.fmt(c.ini).slice(0, 5) + ' al ' + A.fmt(c.fin).slice(0, 5) + '</small></div><p class="c21res">' + res + '</p>' +
         P.map(function (q) { return '<div class="lln"><i class="ldot ' + q.c + '"></i><div><p><b>' + esc(q.t) + ':</b> ' + esc(q.x) + '</p>' + (q.l || '') + '</div></div>'; }).join('') + '</div>';
     }
     function ciclosPanelHTML(C, hab, habP) {
@@ -3221,7 +3222,7 @@
       state.msec[tab] = null;
       return '<div class="mosaico">' + G.map(function (g) {
         var ic = MS_IC[g[0]] || ['', ''];
-        return '<button class="mtile" data-msec="' + tab + '|' + g[0] + '"><svg class="' + ic[0] + '" viewBox="' + (ic[2] || '0 0 28 28') + '" width="' + (ic[3] || 30) + '" height="' + (ic[3] ? 32 : 30) + '" aria-hidden="true">' + ic[1] + '</svg><span><b>' + g[0] + '</b><small>' + (MS_DESC[g[0]] || '') + '</small></span></button>';
+        return '<button class="mtile" data-msec="' + tab + '|' + g[0] + '"><svg class="' + ic[0] + '" viewBox="' + (ic[2] || '0 0 28 28') + '" width="' + (ic[3] || 30) + '" height="' + (ic[3] ? 32 : 30) + '" aria-hidden="true">' + ic[1] + '</svg><span><b>' + g[0] + '</b><small>' + ((g[0] === 'Lo que viene' && !esVet() ? 'Partos y rodeo que se vienen' : MS_DESC[g[0]]) || '') + '</small></span></button>';
       }).join('') + '</div>';
     }
     function rodeoTodasHTML() {
@@ -3370,7 +3371,7 @@
       var L = ver === 'top' ? r.vacas.slice(0, r.k10) : ver === 'peor' ? r.vacas.slice(-r.k10).reverse() : r.vacas;
       var lim = ver === 'todas' ? (state.idxN || 40) : L.length;
       var vet = esVet() && !esOperario(); if (ver === 'toro' && !vet) ver = 'top';
-      var chips = '<div class="filters" role="group" aria-label="Ranking">' + [['top', 'Mejores 10%'], ['peor', 'Peores 10%'], ['todas', 'Todas (' + r.n + ')']].concat(vet ? [['toro', 'Por toro']] : []).map(function (v) {
+      var chips = '<div class="filters" role="group" aria-label="Ranking">' + [['top', 'Mejores 10%'], ['peor', 'Peores 10%'], ['todas', 'Todas (' + r.n + ')']].concat(vet ? [['toro', 'Por toro ' + VTAG]] : []).map(function (v) {
         return '<button class="fchip" data-iv="' + v[0] + '" aria-pressed="' + (ver === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
       return '<section class="card"><h2>Índice del tambo</h2>' +
@@ -3930,6 +3931,7 @@
       });
     }
     function shImagen(w) {
+      Array.prototype.forEach.call(w.querySelectorAll('.vtag'), function (x) { x.remove(); });
       document.body.appendChild(w);
       return cargarH2C().then(function (h2c) {
         return h2c(w, { scale: 2.7, backgroundColor: '#F0F2F3', logging: false,
@@ -4038,10 +4040,13 @@
       var pc = pan.cloneNode(true); pc.style.marginTop = '10px'; d.appendChild(pc);
       shMandar([shHoja('Resumen de visita', 'Visita del ' + A.fmt(today()), '', d, 500)], 'Resumen de visita');
     }
+    // marca de lo que solo ve el veterinario (opción A, nov 2026): etiqueta VET al lado del título; no sale en las imágenes
+    var VTAG = '<span class="vtag">VET</span>';
+    function soloVetCard(k) { return k === 'Lectura del tambo' || k === 'Comparar zafras' || k === 'Proyección de guachera' || /^Preñez de la zafra/.test(k); }
     // qué hay adentro de cada tarjeta o lista: una línea gris debajo del título
     var DESC = {
       'Partos': 'Vacas y vaquillonas, mes a mes', 'Salidas tempranas': 'Vendidas o muertas antes de los 60 días de paridas', 'Celos perdidos': 'Ciclo normal y celos no detectados entre servicios', 'Vacas por año': 'Ordeñe y vaca masa promedio, año a año', 'Calendario sanitario': 'El plan del año, mes a mes', 'sancal': 'El plan del año, mes a mes', 'Producción': 'Litros por vaca y días en leche del último control', 'Por rodeo': 'Animales y preñadas en cada rodeo', 'Reproducción de vaquillonas': 'Concepción, preñez y servicios por zafra', 'Ordeñe y secas': 'Cómo vinieron los últimos 12 meses',
-      'Lectura del tambo': 'Lo que dicen los números, en palabras', 'Partos por mes': 'Los partos que se vienen', 'Rodeo por mes': 'Ordeñe, secas y preparto que se vienen',
+      'Lectura del tambo': 'Lo que dicen los números, en palabras', 'Proyección de guachera': 'Terneras en la guachera, semana a semana', 'Partos por mes': 'Los partos que se vienen', 'Rodeo por mes': 'Ordeñe, secas y preparto que se vienen',
       'Ciclos de 21 días': 'Servicio y concepción de cada ciclo', 'Comparar zafras': 'Los indicadores de cada zafra, lado a lado',
       'Índice del tambo': 'Las mejores y las peores vacas', 'Condición corporal': 'Al secado, al parto, a los 30 días y en la lactancia',
       'Últimos 12 meses': 'Litros y sólidos por vaca, mes a mes', 'Por lote': 'Litros y días en leche de cada lote', 'Mastitis': 'Casos, repetidos y cuándo aparecen', 'Curva de lactancia': 'Primíparas y multíparas según días en leche',
@@ -4073,6 +4078,7 @@
         if (head === h2) { var w = document.createElement('div'); sec.insertBefore(w, h2); var tb = document.createElement('div'); tb.className = 'pttl'; tb.appendChild(h2); w.appendChild(tb); head = w; }
         // índice: el título y la descripción quedan juntos, a la izquierda del número
         if (head !== h2 && !head.querySelector('.pttl')) { var tb2 = document.createElement('div'); tb2.className = 'pttl'; head.insertBefore(tb2, h2); tb2.appendChild(h2); }
+        if (!ficha && esVet() && soloVetCard(key)) h2.insertAdjacentHTML('beforeend', ' ' + VTAG);
         if (ds) head.querySelector('.pttl').insertAdjacentHTML('beforeend', '<small class="pdesc">' + esc(ds) + '</small>');
         sec.classList.add('plg'); if (FICHA_AB[key]) sec.classList.add('open');
         head.classList.add('plgh'); head.setAttribute('role', 'button'); head.setAttribute('tabindex', '0'); head.setAttribute('aria-expanded', !!FICHA_AB[key]); head.dataset.plg = key;
