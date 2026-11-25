@@ -1568,9 +1568,11 @@
     }
     function tareasHTML() {
       var t = A.tareas(DB.animales.filter(function (a) { return a.cat !== 'ternera'; }), today(), state.ventana), vtxt = (VENT.filter(function (v) { return v[0] === state.ventana; })[0] || [0, ''])[1];
-      var fs = fechaSecado(), sec = listaSecado(fs);
+      var fs = fechaSecado(), sModo = secModo(), sLts = secLts(), sec = sModo === 'lts' ? listaSecadoLts(sLts) : listaSecado(fs);
       state.secarLista = sec;
+      var secModoChips = '<div class="filters" role="group" aria-label="Cómo armar la lista">' + [['fecha', 'Por fecha'], ['lts', 'Por litros']].map(function (c) { return '<button class="fchip plain" data-secmodo="' + c[0] + '" aria-pressed="' + (sModo === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div>';
       var secChips = '<div class="secsel"><span>Secar a</span>' + SECS.map(function (n) { return '<button class="fchip plain" data-sec="' + n + '" aria-pressed="' + (A.SECADO === n) + '">' + n + '</button>'; }).join('') + '<span>días del parto</span></div>';
+      var ltsChips = '<div class="secsel"><span>Menos de</span>' + SECLTS.map(function (n) { return '<button class="fchip plain" data-seclts="' + n + '" aria-pressed="' + (sLts === n) + '">' + n + '</button>'; }).join('') + '<span>litros</span></div>';
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
@@ -1584,9 +1586,14 @@
           return secTareas('tactar', 'Para tactar · vacas', nota, vc, rowT, 'No hay vacas pendientes de tacto.') +
             secTareas('tactarvq', 'Para tactar · vaquillonas', nota, vq, rowT, 'No hay vaquillonas pendientes de tacto.');
         })() +
-        secTareas('secar', 'Para secar', '<label class="secfecha">Fecha de secado <input type="date" id="fsec" value="' + fs + '" min="' + today() + '"></label>' + secChips + '<p class="secnote">Vacas preñadas que el ' + A.fmt(fs) + ' están a ' + A.SECADO + ' días o menos del parto. Ordenadas por caravana.</p>' + ('<button class="btn share" data-a="compsecar"' + (sec.length ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar lista por WhatsApp</button>' + (sec.length ? '' : '<p class="hint">Elegí la fecha del próximo secado para armar la lista.</p>')), sec, function (x) {
-          return rowHTML(x.a, { right: '<span class="when">' + x.dp + ' días al parto</span>', sub: 'Parto probable ' + A.fmt(x.P) });
-        }, 'Ninguna vaca para secar el ' + A.fmt(fs) + '.') +
+        secTareas('secar', 'Para secar', secModoChips + (sModo === 'lts'
+          ? ltsChips + '<p class="secnote">Vacas preñadas en ordeñe con menos de ' + sLts + ' litros en el último control. Ordenadas por caravana.</p>'
+          : '<label class="secfecha">Fecha de secado <input type="date" id="fsec" value="' + fs + '" min="' + today() + '"></label>' + secChips + '<p class="secnote">Vacas preñadas que el ' + A.fmt(fs) + ' están a ' + A.SECADO + ' días o menos del parto. Ordenadas por caravana.</p>') +
+          ('<button class="btn share" data-a="compsecar"' + (sec.length ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar lista por WhatsApp</button>' + (sec.length || sModo === 'lts' ? '' : '<p class="hint">Elegí la fecha del próximo secado para armar la lista.</p>')), sec, function (x) {
+          return sModo === 'lts'
+            ? rowHTML(x.a, { right: '<span class="when">' + nf(x.lt, 1) + ' lts</span>', sub: x.P ? 'Parto probable ' + A.fmt(x.P) + ' · ' + x.dp + ' días al parto' : 'Preñada' })
+            : rowHTML(x.a, { right: '<span class="when">' + x.dp + ' días al parto</span>', sub: 'Parto probable ' + A.fmt(x.P) });
+        }, sModo === 'lts' ? 'Ninguna vaca preñada con menos de ' + sLts + ' litros en el último control.' : 'Ninguna vaca para secar el ' + A.fmt(fs) + '.') +
         secTareas('partos', 'Próximos partos', chips + '<p class="secnote">Partos probables en los próximos ' + vtxt + '.</p>', t.partos, function (x) {
           return rowHTML(x.a, { right: '<span class="when">' + A.rel(x.dias) + '</span>', sub: 'Parto probable ' + A.fmt(x.fecha) });
         }, 'Ningún parto probable en los próximos ' + vtxt + '.') +
@@ -1669,11 +1676,25 @@
       });
       return out.sort(function (x, y) { return numRp(x.a, y.a); });
     }
+    // Para secar por litros: vacas preñadas en ordeñe con menos de N litros en el último control
+    var SECLTS = [8, 10, 12, 14];
+    function secModo() { if (!state.secModo) { var m = null; try { m = localStorage.getItem('libreta:secmodo'); } catch (e) {} state.secModo = m === 'lts' ? 'lts' : 'fecha'; } return state.secModo; }
+    function secLts() { if (!state.secLts) { var n = null; try { n = +localStorage.getItem('libreta:seclts'); } catch (e) {} state.secLts = SECLTS.indexOf(n) >= 0 ? n : 10; } return state.secLts; }
+    function listaSecadoLts(L) {
+      var out = [], hoy = today();
+      DB.animales.forEach(function (a) {
+        if (a.estado !== 'prenada' || (a.cat && a.cat !== 'vaca')) return;
+        var lt = (a.pr || [])[0]; if (typeof lt !== 'number' || lt <= 0 || lt >= L) return;
+        var d = A.derive(a, hoy), P = d.partoProb || null;
+        out.push({ a: a, lt: lt, P: P, dp: P ? A.diffDays(P, hoy) : null });
+      });
+      return out.sort(function (x, y) { return numRp(x.a, y.a); });
+    }
     function compartirSecar() {
-      var L = state.secarLista || [];
+      var L = state.secarLista || [], lts = secModo() === 'lts';
       var txt = '*Vacas para secar' + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' +
-        'Secado del ' + A.fmt(state.fsec) + ' · hasta ' + A.SECADO + ' días antes del parto\n\n' +
-        L.map(function (x) { return '*' + x.a.rp + '* · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)'; }).join('\n') +
+        (lts ? 'Preñadas con menos de ' + secLts() + ' litros en el último control\n\n' : 'Secado del ' + A.fmt(state.fsec) + ' · hasta ' + A.SECADO + ' días antes del parto\n\n') +
+        L.map(function (x) { return lts ? '*' + x.a.rp + '* · ' + nf(x.lt, 1) + ' lts' + (x.P ? ' · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)' : '') : '*' + x.a.rp + '* · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)'; }).join('\n') +
         '\n\nTotal: ' + L.length + (L.length === 1 ? ' vaca' : ' vacas') + '\nDr. Mauro Torterolo';
       if (navigator.share) navigator.share({ text: txt }).catch(function () {});
       else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
@@ -6337,6 +6358,8 @@
       if ((el = e.target.closest('[data-insel]'))) { state.insSel = el.dataset.insel; render(); return; }
       if ((el = e.target.closest('[data-gcr]'))) { state.gCr = +el.dataset.gcr; setP('gcr', el.dataset.gcr); render(); return; }
       if ((el = e.target.closest('[data-gtoro]'))) { var gT = gToros(), gt = el.dataset.gt, gn = el.dataset.gtoro; if (gt === (gAutoTipo(gn) || 'n')) delete gT[gn]; else gT[gn] = gt; setP('gtoros', JSON.stringify(gT)); render(); return; }
+      if ((el = e.target.closest('[data-secmodo]'))) { state.secModo = el.dataset.secmodo; try { localStorage.setItem('libreta:secmodo', state.secModo); } catch (x) {} render(); return; }
+      if ((el = e.target.closest('[data-seclts]'))) { state.secLts = +el.dataset.seclts; try { localStorage.setItem('libreta:seclts', el.dataset.seclts); } catch (x) {} render(); return; }
       if ((el = e.target.closest('[data-sec]'))) { A.setSecado(+el.dataset.sec); try { localStorage.setItem('libreta:secado', el.dataset.sec); } catch (x) {} render(); return; }
       if ((el = e.target.closest('[data-plg]'))) { var sec = el.parentNode, ab = !sec.classList.contains('open'); sec.classList.toggle('open', ab); el.setAttribute('aria-expanded', ab); if (ab) FICHA_AB[el.dataset.plg] = 1; else delete FICHA_AB[el.dataset.plg]; return; }
       if ((el = e.target.closest('[data-desp]'))) { state.desp = state.desp || {}; state.desp[el.dataset.desp] = !state.desp[el.dataset.desp]; render(); return; }
