@@ -1361,7 +1361,7 @@
     }
 
     /* ----- pestaña Tareas ----- */
-    var SECS = [45, 50, 60, 65];
+    var SECS = [45, 50, 55, 60, 65, 70, 75, 80, 85, 90]; // perilla de 45 a 90 de a 5; por defecto 60
     var VENT = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [183, '6 meses'], [365, '12 meses']];
     // seca o vaquillona preñada en los últimos 30 días antes del parto probable (como en Rodeo por mes)
     function enPreparto(a) {
@@ -1571,7 +1571,7 @@
       var fs = fechaSecado(), sLts = secLts(), sec = listaSecar(fs, sLts);
       state.secarLista = sec;
       var nSel = sec.filter(secSel).length;
-      var secChips = '<div class="secsel"><span>Secar a</span>' + SECS.map(function (n) { return '<button class="fchip plain" data-sec="' + n + '" aria-pressed="' + (A.SECADO === n) + '">' + n + '</button>'; }).join('') + '<span>días del parto</span></div>';
+      var secChips = '<div class="secrng"><div class="secrv"><span>Secar a</span><b id="secv">' + A.SECADO + '</b><span>días del parto</span></div><input type="range" id="secr" min="45" max="90" step="5" value="' + A.SECADO + '" aria-label="Días de secado antes del parto"><div class="secrt2"><span>45</span><span>60</span><span>75</span><span>90</span></div></div>';
       var ltsChips = '<div class="secsel"><span>Menos de</span>' + SECLTS.map(function (n) { return '<button class="fchip plain" data-seclts="' + n + '" aria-pressed="' + (sLts === n) + '">' + n + '</button>'; }).join('') + '<span>litros</span></div>';
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
@@ -6540,9 +6540,11 @@
       if ((e.target.id === 'insd0' || e.target.id === 'insd1') && e.target.value) { var k = e.target.id === 'insd0' ? 'insD0' : 'insD1'; state[k] = e.target.value; setP(k.toLowerCase(), e.target.value); render(); return; }
       if (e.target.dataset && e.target.dataset.ip) { var Pp = insPrecios(), v = parseFloat(String(e.target.value).replace(',', '.')); Pp[e.target.dataset.ip] = isFinite(v) && v >= 0 ? v : null; setP('insprec', JSON.stringify(Pp)); if (state.insR) render(); return; }
       if (e.target.dataset && e.target.dataset.sf && e.target.tagName === 'SELECT') { sanInput(e.target); return; }
+      if (e.target.id === 'secr') { var sn = Math.round(e.target.value); if (SECS.indexOf(sn) >= 0) { A.setSecado(sn); try { localStorage.setItem('libreta:secado', String(sn)); } catch (x) {} render(); } return; }
       if (e.target.id === 'fsec' && e.target.value) { state.fsec = e.target.value; setP('fsec', state.fsec); render(); }
     });
     document.addEventListener('input', function (e) {
+      if (e.target.id === 'secr') { var sv = document.getElementById('secv'); if (sv) sv.textContent = Math.round(e.target.value); return; }
       if (e.target.dataset && e.target.dataset.sf && e.target.tagName !== 'SELECT') { sanInput(e.target); return; }
       if (e.target.dataset && e.target.dataset.vn) { var w = parseInt(e.target.value, 10); state.vtaDraft[e.target.dataset.vn] = w > 0 ? w : null; vtaCuenta(); return; }
       if (e.target.dataset && e.target.dataset.xn) { var v = parseInt(e.target.value, 10); state.xf[e.target.dataset.xn] = v > 0 ? v : null; xActualizarCuenta(); return; }
