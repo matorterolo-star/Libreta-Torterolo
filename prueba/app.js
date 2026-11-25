@@ -1851,10 +1851,17 @@
         var t = gToroFec(a, Pp); if (t) { toros[t] = toros[t] || { n: 0, q: 0 }; toros[t].n++; if (c === 'vaquillona') toros[t].q++; }
         partos.push({ f: Pp, q: c === 'vaquillona', t: t });
       });
+      // posibles: vacas y vaquillonas servidas sin tacto, como si todas quedaran preñadas del último servicio
+      var serv = [];
+      DB.animales.forEach(function (a) {
+        var c = a.cat || 'vaca'; if (c === 'ternera' || a.estado !== 'servida' || !a.sFecha) return;
+        var Pp = A.addDays(a.sFecha, A.GEST); if (Pp < hoy) return;
+        serv.push({ f: Pp, q: c === 'vaquillona', t: gNomToro(a.toro) });
+      });
       var dedu = Object.keys(toros).some(esc0);
       var perd = (gNum(P.perd) || 0) / 100, mort = (gNum(P.mort) || 0) / 100, sxv = (gNum(P.sxv) || 0) / 100, carv = (gNum(P.carv) || 0) / 100;
       var nQ = 0, nQsx = 0, nQsin = 0, nQman = 0, nV = 0, nVsin = 0, esp = 0, espQ = 0;
-      partos.forEach(function (x) {
+      var pesar = function (x, cuenta) {
         var tp = dedu ? tipo(x.t) : null, ph;
         if (x.q) {
           nQ++;
@@ -1866,13 +1873,17 @@
           else if (tp) ph = GP_H[tp];
           else { ph = sxv * GP_H.s + carv * GP_H.c + Math.max(0, 1 - sxv - carv) * GP_H.n; if (dedu) nVsin++; }
         }
-        x.w = ph * (1 - perd) * (1 - mort); esp += x.w; if (x.q) espQ += x.w;
-      });
+        x.w = ph * (1 - perd) * (1 - mort);
+      };
+      partos.forEach(function (x) { pesar(x); esp += x.w; if (x.q) espQ += x.w; });
+      var nQ0 = nQ, nQsx0 = nQsx, nQsin0 = nQsin, nQman0 = nQman, nV0 = nV, nVsin0 = nVsin, espS = 0;
+      serv.forEach(function (x) { pesar(x); espS += x.w; });
+      nQ = nQ0; nQsx = nQsx0; nQsin = nQsin0; nQman = nQman0; nV = nV0; nVsin = nVsin0; // el resumen del sexado sigue siendo de los partos confirmados
       // terneras que ya están: hembras nacidas en los últimos 75 días (terneras registradas; si no hay, crías hembra anotadas en los partos)
       var naci = [], d75 = A.addDays(hoy, -75);
       DB.animales.forEach(function (a) { if (a.cat !== 'ternera') return; var h = DB.hist && DB.hist[a.rp]; if (h && h.fn && h.fn > d75 && h.fn <= hoy) naci.push({ f: h.fn, w: 1 }); });
       if (!naci.length && DB.hist) Object.keys(DB.hist).forEach(function (k) { var h = DB.hist[k]; if (!h || !h.pa) return; h.pa.forEach(function (p) { if (p[0] > d75 && p[0] <= hoy) { var nh = String(p[2] || '').split('/').filter(function (c) { return c === 'H'; }).length; if (nh) naci.push({ f: p[0], w: nh * (1 - mort) }); } }); });
-      return { hoy: hoy, lim: lim, P: P, TM: TM, partos: partos, naci: naci, toros: toros, dedu: dedu, nQ: nQ, nQsx: nQsx, nQsin: nQsin, nQman: nQman, nV: nV, nVsin: nVsin, esp: esp, espQ: espQ };
+      return { hoy: hoy, lim: lim, P: P, TM: TM, partos: partos, naci: naci, toros: toros, dedu: dedu, nQ: nQ, nQsx: nQsx, nQsin: nQsin, nQman: nQman, nV: nV, nVsin: nVsin, esp: esp, espQ: espQ, serv: serv, espS: espS };
     }
     function guacheraSemanas(G, N) {
       var d = new Date(G.hoy + 'T12:00:00'), dw = (d.getDay() + 6) % 7, ini = A.addDays(G.hoy, -dw), S = [], todos = G.naci.concat(G.partos);
@@ -1904,7 +1915,9 @@
       var chips = '<div class="secsel"><span>Crianza</span>' + [45, 60, 75].map(function (d) { return '<button class="fchip plain" data-gcr="' + d + '" aria-pressed="' + (N === d) + '">' + d + '</button>'; }).join('') + '<span>días</span></div>';
       var kp = '<div class="kpis kpis2"><div' + (sobre.length ? ' class="mal"' : '') + '><b>' + pico + '</b><span>Pico · semana del ' + fd(S[iP].f) + '</span></div>' +
         (cap ? '<div' + (sobre.length ? ' class="mal"' : ' class="ok"') + '><b>' + sobre.length + '</b><span>' + (sobre.length ? 'Semanas sobre ' + cap + ' · desde el ' + fd(S[sobre[0]].f) : 'Semanas sobre ' + cap + ' · no se pasa') + '</span></div>'
-          : '<div><b>' + vals[0] + '</b><span>Hoy en la guachera</span></div>') + '</div>';
+          : '<div><b>' + vals[0] + '</b><span>Hoy en la guachera</span></div>') + '</div>' +
+        '<div class="kpis kpis2"><div><b>' + nf(Math.round(G.esp)) + '</b><span>Terneras esperadas · ' + G.partos.length + ' partos confirmados</span></div>' +
+        '<div><b>' + (G.serv.length ? '~' : '') + nf(Math.round(G.esp + G.espS)) + '</b><span>' + (G.serv.length ? 'Posibles · si preñan las ' + G.serv.length + ' servidas sin tacto' : 'Posibles · no hay servidas sin tacto') + '</span></div></div>';
       // resumen del sexado de las vaquillonas
       var pc = function (v) { var x = gNum(v); return x == null ? '0%' : nf(x) + '%'; };
       var sx = !G.nQ ? '' : G.dedu ? 'de los servicios: ' + nf(Math.round(G.nQsx / Math.max(1, G.nQ - G.nQsin) * 100)) + '%' + (G.nQsin ? ' (' + G.nQsin + ' sin toro, a mano)' : '')
@@ -1913,9 +1926,9 @@
       var aj = state.gAj ? guacheraAjustes(G) : '';
       return '<section class="card guach"><h2>Proyección de guachera</h2>' + chips + kp +
         '<svg class="mchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Terneras en la guachera por semana">' + s + '</svg>' +
-        '<p class="cap">Hasta el ' + fd(S[S.length - 1].f) + ': lo que viene después todavía depende de vacas sin tacto. ' + nf(G.esp) + ' terneras esperadas de ' + G.partos.length + ' partos confirmados.</p>' + fila +
+        '<p class="cap">Hasta el ' + fd(S[S.length - 1].f) + ': lo que viene después todavía depende de vacas sin tacto.</p>' + fila +
         '<button class="despbtn" data-a="gaj" aria-expanded="' + !!state.gAj + '"><span>Ajustes del tambo</span><span class="chev">' + (state.gAj ? 'ocultar' : 'ver') + '</span></button>' + aj +
-        '<details class="nota"><summary>Cómo se calcula</summary><p class="cap">Cada parto confirmado por tacto aporta una ternera esperada: probabilidad de hembra (semen sexado 0,90; convencional 0,48; carne 0) × (1 − pérdida de preñez) × (1 − mortalidad al parto). La ternera ocupa un lugar desde que nace hasta el día ' + N + '. Cada barra es la suma de las terneras esperadas nacidas en los ' + N + ' días anteriores a esa semana, más las hembras que ya nacieron. La baja de preñez del sexado no cuenta: ya son preñeces confirmadas. Estaciones para el sexado de vaquillonas: otoño feb–may, invierno jun–ago, primavera sep–ene, según la fecha de parto.</p></details></section>';
+        '<details class="nota"><summary>Cómo se calcula</summary><p class="cap">Cada parto confirmado por tacto aporta una ternera esperada: probabilidad de hembra (semen sexado 0,90; convencional 0,48; carne 0) × (1 − pérdida de preñez) × (1 − mortalidad al parto). La ternera ocupa un lugar desde que nace hasta el día ' + N + '. Cada barra es la suma de las terneras esperadas nacidas en los ' + N + ' días anteriores a esa semana, más las hembras que ya nacieron. La baja de preñez del sexado no cuenta: ya son preñeces confirmadas. Posibles: las esperadas más las servidas sin tacto, como si todas quedaran preñadas del último servicio (parto a los ' + A.GEST + ' días), con la misma cuenta de hembras; es el máximo, no una predicción. Estaciones para el sexado de vaquillonas: otoño feb–may, invierno jun–ago, primavera sep–ene, según la fecha de parto.</p></details></section>';
     }
     function guacheraAjustes(G) {
       var P = G.P, inp = function (k, lbl, suf) { return '<label class="xnum">' + lbl + ' <input type="number" inputmode="decimal" min="0" max="' + (k === 'cap' ? 9999 : 100) + '" data-gp="' + k + '" value="' + esc(P[k] == null ? '' : P[k]) + '" placeholder="–"> ' + (suf || '') + '</label>'; };
