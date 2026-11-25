@@ -6055,10 +6055,11 @@
        Rojo: menos días de seca que la perilla; amarillo: más de perilla + 15. Los días quedan guardados por tambo y mes. ----- */
     var AYU_DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     function ayuMes() {
-      var hoy = today(), m = state.ayuProx ? A.addDays(hoy.slice(0, 8) + '01', 40).slice(0, 7) : hoy.slice(0, 7);
+      var hoy = today(), o = state.ayuOff || 0, m = ayuMesN(o);
       var ult = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
-      return { m: m, ini: state.ayuProx ? m + '-01' : hoy, fin: m + '-' + (ult < 10 ? '0' : '') + ult, ult: ult };
+      return { m: m, ini: o ? m + '-01' : hoy, fin: m + '-' + (ult < 10 ? '0' : '') + ult, ult: ult };
     }
+    function ayuMesN(o) { var d = new Date(today().slice(0, 7) + '-15T12:00:00'); d.setMonth(d.getMonth() + o); return d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1); }
     function ayuFechas(m) { var v = []; try { v = JSON.parse(getP('ayusec:' + m) || '[]'); } catch (e) {} return (v || []).filter(function (d) { return typeof d === 'string' && d.slice(0, 7) === m; }).sort(); }
     function ayuDatos() {
       var M = ayuMes(), F = ayuFechas(M.m).filter(function (d) { return d >= M.ini; }), hoy = today(), vacas = [];
@@ -6067,7 +6068,7 @@
         var P = A.derive(a, hoy).partoProb; if (!P) return;
         var ideal = A.addDays(P, -A.SECADO);
         // este mes: también las atrasadas (secado ideal ya pasado y siguen en ordeñe); próximo mes: solo las de ese mes
-        if (ideal > M.fin || (state.ayuProx && ideal < M.ini)) return;
+        if (ideal > M.fin || (state.ayuOff && ideal < M.ini)) return;
         if (A.diffDays(P, hoy) < 0) return;
         vacas.push({ a: a, P: P, ideal: ideal });
       });
@@ -6087,7 +6088,7 @@
       var volver = '<button class="backbtn" data-a="ayucerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>';
       var mesN = MESL[+M.m.slice(5, 7) - 1]; mesN = mesN.charAt(0).toUpperCase() + mesN.slice(1);
       var h = '<div class="ayu">' + volver + '<h1 class="ptitle">Programar secados</h1>' +
-        '<div class="ayums"><button class="fchip plain" data-ayum="0" aria-pressed="' + !state.ayuProx + '">Este mes</button><button class="fchip plain" data-ayum="1" aria-pressed="' + !!state.ayuProx + '">Próximo mes</button></div>' +
+        '<div class="ayums">' + [0, 1, 2].map(function (o) { var n = MESL[+ayuMesN(o).slice(5, 7) - 1]; return '<button class="fchip plain" data-ayum="' + o + '" aria-pressed="' + ((state.ayuOff || 0) === o) + '">' + n.charAt(0).toUpperCase() + n.slice(1) + '</button>'; }).join('') + '</div>' +
         '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' vaca preñada llega' : ' vacas preñadas llegan') + ' al secado en ' + mesN.toLowerCase() + ' (a ' + A.SECADO + ' días del parto). Tocá en el almanaque los días que vas a secar; tocá de nuevo para sacarlo.</p>';
       // almanaque
       var off = (new Date(M.m + '-01T12:00:00').getDay() + 6) % 7, cnt = {};
@@ -6442,7 +6443,7 @@
       if ((cpt = e.target.closest('[data-ctlmas]'))) { var mm = cpt.previousElementSibling; if (mm) mm.hidden = false; cpt.remove(); return; }
       if ((cpt = e.target.closest('[data-secck]'))) { secToggle(cpt); return; }
       if ((cpt = e.target.closest('[data-ayud]'))) { ayuToggle(cpt.dataset.ayud); return; }
-      if ((cpt = e.target.closest('[data-ayum]'))) { state.ayuProx = cpt.dataset.ayum === '1'; render(); return; }
+      if ((cpt = e.target.closest('[data-ayum]'))) { state.ayuOff = +cpt.dataset.ayum; render(); return; }
       var row = e.target.closest('[data-rp]');
       if (row) { openFicha(row.getAttribute('data-rp')); return; }
       var el;
