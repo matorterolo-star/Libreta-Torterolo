@@ -2055,20 +2055,8 @@
       // 3) último diagnóstico de gestación (tacto) cargado, y vacas y vaquillonas pendientes de tacto
       // último día de tacto real: al menos 5 vacas en ordeñe tactadas ese día (no cuentan vaquillonas, secas ni diagnósticos sueltos
       // como un aborto cargado en la tabla de tactos)
-      var TMIN = 5, porDia = {}, ut = null;
-      DB.animales.forEach(function (a) {
-        var h = DB.hist[a.rp]; if (!h || !h.ta) return;
-        h.ta.forEach(function (t) {
-          if (t[0] > ref) return;
-          var lp = null; (h.pa || []).forEach(function (p) { if (p[0] < t[0]) lp = p; });
-          if (!lp || (lp[5] && lp[5] <= t[0])) return; // sin parto (vaquillona) o ya secada
-          porDia[t[0]] = (porDia[t[0]] || 0) + 1;
-        });
-      });
-      Object.keys(porDia).forEach(function (d) { if (porDia[d] >= TMIN && (!ut || d > ut)) ut = d; });
-      R.ultTactoN = ut ? porDia[ut] : null;
-      R.ultTacto = ut;
-      try { R.nTactar = A.tareas(DB.animales.filter(function (a) { return a.cat !== 'ternera'; }), today(), 30).tactar.length; } catch (e) { R.nTactar = null; }
+      var UT = ultTactoVacas(ref); R.ultTactoN = UT.n; R.ultTacto = UT.f;
+      try { R.nTactar = A.tareas(DB.animales.filter(function (a) { return a.cat === 'vaca'; }), today(), 30).tactar.length; } catch (e) { R.nTactar = null; }
       // 4) leche: litros por vaca del último mes con control, contra el mismo mes del año anterior
       var E = evolucion('lv'), u = E && E.meses[E.meses.length - 1];
       if (u && u.cur != null) R.le = { v: u.cur, prev: u.prev, mes: u.label, anio: u.anio };
@@ -6032,6 +6020,22 @@
       if (simple && dl !== '' && dl < PLT_PARIDA) return null;
       return ['PARIDA', dl];
     }
+    /* Último tacto de vacas (el mismo para el Panel y Voy mañana): último día con al menos 5 vacas en ordeñe tactadas
+       (no cuentan vaquillonas, secas ni diagnósticos sueltos como un aborto cargado en la tabla de tactos). */
+    function ultTactoVacas(ref) {
+      var TMIN = 5, porDia = {}, ut = null;
+      DB.animales.forEach(function (a) {
+        var h = DB.hist[a.rp]; if (!h || !h.ta) return;
+        h.ta.forEach(function (t) {
+          if (t[0] > ref) return;
+          var lp = null; (h.pa || []).forEach(function (p) { if (p[0] < t[0]) lp = p; });
+          if (!lp || (lp[5] && lp[5] <= t[0])) return; // sin parto (vaquillona) o ya secada
+          porDia[t[0]] = (porDia[t[0]] || 0) + 1;
+        });
+      });
+      Object.keys(porDia).forEach(function (d) { if (porDia[d] >= TMIN && (!ut || d > ut)) ut = d; });
+      return { f: ut, n: ut ? porDia[ut] : null };
+    }
     /* ----- Voy mañana (modo veterinario): lo que hay que ver en la visita de mañana, en cuatro cuadros + leche y próximos 30 días.
        Todo calculado a la fecha de la visita (mañana). Sin descartes. A tocar: vacas en ordeñe servidas hace 35 días o más,
        vacías o con tacto sin preñez sin servicio después, y preñadas con celo o servicio después del tacto.
@@ -6071,7 +6075,7 @@
     function voyHTML() {
       var R = voyDatos(), DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
       var dsem = DIAS[new Date(R.ref + 'T12:00:00').getDay()];
-      var ult = '0000'; DB.animales.forEach(function (a) { if (a.tFecha && a.tFecha > ult) ult = a.tFecha; });
+      var ult = ultTactoVacas(today()).f || '0000';
       var volver = '<button class="backbtn" data-a="voycerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>';
       if (state.voyLista) {
         var k = state.voyLista, items = k === 'alertas' ? R.atras.concat(R.repe) : k === 'prox' ? R.secar.concat(R.partos) : R[k];
