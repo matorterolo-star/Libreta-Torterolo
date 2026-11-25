@@ -6057,9 +6057,9 @@
        Los días marcados quedan guardados por tambo y mes. ----- */
     var AYU_DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     var AYU = {
-      secar: { t: 'Programar secados', s: 'Repartí los secados del mes en los días que elijas', lead: function () { return A.SECADO; }, tol: 15, u: 'de seca', vb: 'al secado', k: 'ayusec',
+      secar: { t: 'Programar secados', s: 'Repartí los secados del mes en los días que elijas', lead: function () { return A.SECADO; }, min: function () { return A.SECADO; }, max: function () { return A.SECADO + 15; }, u: 'de seca', vb: 'al secado', k: 'ayusec',
         ok: function (a) { return a.cat === 'vaca' || !a.cat; } },
-      pre: { t: 'Entradas a preparto', s: 'Qué vacas y vaquillonas entran al preparto cada día', lead: function () { return A.PREPARTO; }, tol: 7, u: 'de preparto', vb: 'al preparto', k: 'ayupre',
+      pre: { t: 'Entradas a preparto', s: 'Qué vacas y vaquillonas entran al preparto cada día', lead: function () { return A.PREPARTO; }, min: function () { return 20; }, max: function () { return A.PREPARTO; }, antes: true, u: 'de preparto', vb: 'al preparto', k: 'ayupre',
         ok: function (a) { return a.cat === 'vaca' || a.cat === 'seca' || a.cat === 'vaquillona' || !a.cat; } },
       tacto: { t: '¿Cuándo llamo al veterinario?', s: 'Cuántas vacas habría para tactar según el día' }
     };
@@ -6086,7 +6086,11 @@
       var T = F.map(function (d) { return { d: d, v: [] }; });
       vacas.forEach(function (x) {
         if (!T.length) return;
-        var t = null; T.forEach(function (y) { if (A.diffDays(x.P, y.d) >= L) t = y; });
+        var t = null, mn = C.min(), mx = C.max();
+        // secado: el último día que deja al menos el mínimo (más leche). Preparto: dentro del rango, el que deja más días
+        // (entrar antes es más seguro si se adelanta el parto); si ninguno cae en el rango, el último que deja el mínimo
+        if (C.antes) T.forEach(function (y) { var n = A.diffDays(x.P, y.d); if (!t && n >= mn && n <= mx) t = y; });
+        if (!t) T.forEach(function (y) { if (A.diffDays(x.P, y.d) >= mn) t = y; });
         if (!t) t = T[0];
         x.n = A.diffDays(x.P, t.d); t.v.push(x);
       });
@@ -6118,19 +6122,19 @@
       if (k === 'tacto') return ayuTactoHTML(volver);
       var C = AYU[k], D = ayuDatos(C), M = D.M, L = D.L, mesN = MESL[+M.m.slice(5, 7) - 1], cnt = {};
       D.T.forEach(function (t) { cnt[t.d] = t.v.length; });
-      var col = function (n) { return n < L ? 'r' : n > L + C.tol ? 'a' : 'v'; };
+      var MN = C.min(), MX = C.max(), col = function (n) { return n < MN ? 'r' : n > MX ? 'a' : 'v'; };
       var h = '<div class="ayu">' + volver + '<h1 class="ptitle">' + C.t + '</h1>' + ayuMesesHTML() +
-        '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (a ' + L + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
+        '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (' + (C.antes ? 'de ' + C.min() + ' a ' + L : 'a ' + L) + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
         ayuCalHTML(M, function (f) { return cnt[f] != null ? { c: 'on', s: cnt[f] + ' v' } : null; });
       if (!D.T.length) h += '<p class="hint">' + (D.vacas.length ? 'Marcá en el almanaque los días y la app reparte las vacas.' : 'No hay preñadas que lleguen ' + C.vb + ' en ' + mesN + '.') + '</p>';
       D.T.forEach(function (t) {
-        var ns = t.v.map(function (x) { return x.n; }), mn = Math.min.apply(null, ns), mx = Math.max.apply(null, ns), nr = ns.filter(function (n) { return n < L; }).length;
+        var ns = t.v.map(function (x) { return x.n; }), mn = Math.min.apply(null, ns), mx = Math.max.apply(null, ns), nr = ns.filter(function (n) { return n < MN; }).length;
         h += '<section class="card aytan"><div class="ayth"><h2>' + ayuDia(t.d) + '</h2><span class="count">' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '</span></div>' +
-          (t.v.length ? '<p class="cap">' + (mn === mx ? mn : mn + ' a ' + mx) + ' días ' + C.u + (nr ? ' · <b class="ayr">' + nr + ' con menos de ' + L + '</b>' : '') + '</p><div class="aychips">' +
+          (t.v.length ? '<p class="cap">' + (mn === mx ? mn : mn + ' a ' + mx) + ' días ' + C.u + (nr ? ' · <b class="ayr">' + nr + ' con menos de ' + MN + '</b>' : '') + '</p><div class="aychips">' +
             t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return '<button class="aych ' + col(x.n) + (pt ? ' alr' : '') + '" data-rp="' + esc(x.a.rp) + '"><b>' + esc(x.a.rp) + '</b><small>' + (x.a.cat === 'vaquillona' ? 'vaq · ' : '') + x.n + ' d</small></button>'; }).join('') + '</div>'
             : '<p class="cap">Ningún animal para este día.</p>') + '</section>';
       });
-      if (D.T.length) h += '<p class="cap ayley"><i class="v"></i>' + L + ' a ' + (L + C.tol) + ' días <i class="a"></i>más de ' + (L + C.tol) + ' <i class="r"></i>menos de ' + L + (k === 'secar' ? ' <i class="x"></i>preñada + celo o servicio' : '') + '</p>' +
+      if (D.T.length) h += '<p class="cap ayley"><i class="v"></i>' + MN + ' a ' + MX + ' días <i class="a"></i>más de ' + MX + ' <i class="r"></i>menos de ' + MN + (k === 'secar' ? ' <i class="x"></i>preñada + celo o servicio' : '') + '</p>' +
         '<button class="btn share" data-a="ayuenv">' + AYU_ENV + 'Enviar por WhatsApp</button>';
       return h + '</div>';
     }
@@ -6178,10 +6182,10 @@
         txt = '*Tacto' + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\nPropongo el ' + ayuDia(f).toLowerCase() + '\n' + R.v + (R.v === 1 ? ' vaca servida' : ' vacas servidas') + ' con ' + A.DX_MIN + ' días o más' + (R.q ? ' y ' + R.q + (R.q === 1 ? ' vaquillona' : ' vaquillonas') : '');
       } else {
         var C = AYU[k]; if (!C) return; var D = ayuDatos(C);
-        txt = '*' + C.t + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' + 'A ' + D.L + ' días del parto\n' +
+        txt = '*' + C.t + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' + (C.antes ? 'De ' + C.min() + ' a ' + D.L : 'A ' + D.L) + ' días del parto\n' +
           D.T.map(function (t) {
             return '\n*' + ayuDia(t.d) + '* · ' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '\n' +
-              t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return x.a.rp + (x.a.cat === 'vaquillona' ? ' (vaq.)' : '') + ' · ' + x.n + ' días ' + C.u + (x.n < D.L ? ' ⚠' : '') + (pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') : ''); }).join('\n');
+              t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return x.a.rp + (x.a.cat === 'vaquillona' ? ' (vaq.)' : '') + ' · ' + x.n + ' días ' + C.u + (x.n < C.min() ? ' ⚠' : '') + (pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') : ''); }).join('\n');
           }).join('\n');
       }
       txt += '\n\nDr. Mauro Torterolo';
