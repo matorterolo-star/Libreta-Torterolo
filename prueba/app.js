@@ -6069,31 +6069,39 @@
       return { m: m, ini: o ? m + '-01' : hoy, fin: m + '-' + (ult < 10 ? '0' : '') + ult, ult: ult };
     }
     function ayuFechas(k, m) { var v = []; try { v = JSON.parse(getP(k + ':' + m) || '[]'); } catch (e) {} return (v || []).filter(function (d) { return typeof d === 'string' && d.slice(0, 7) === m; }).sort(); }
+    // el reparto se hace con los días marcados de todos los meses juntos (de dos meses atrás a dos adelante): una vaca que se secó
+    // (o entró al preparto) en una tanda de diciembre ya no aparece en enero, y una de principios de enero puede ir a la última
+    // tanda de diciembre si ahí le quedan los días justos. Los días ya pasados cuentan como hechos.
     function ayuDatos(C) {
-      var M = ayuMes(), F = ayuFechas(C.k, M.m).filter(function (d) { return d >= M.ini; }), hoy = today(), L = C.lead(), vacas = [];
+      var M = ayuMes(), hoy = today(), L = C.lead(), mn = C.min(), mx = C.max(), F = [], vacas = [];
+      [-2, -1, 0, 1, 2].forEach(function (o) { F = F.concat(ayuFechas(C.k, ayuMesN(o))); });
+      F.sort();
+      var fin2 = ayuMesN(2) + '-31';
       DB.animales.forEach(function (a) {
         if (a.estado !== 'prenada' || a.rech || !C.ok(a)) return;
-        var P = A.derive(a, hoy).partoProb; if (!P || A.diffDays(P, hoy) < 0) return;
-        var ideal = A.addDays(P, -L);
-        // mes en curso: también las atrasadas (día ideal ya pasado); los meses siguientes: solo las de ese mes
-        if (ideal > M.fin || (state.ayuOff && ideal < M.ini)) return;
         // las que ya están secas no se vuelven a secar
         if (C === AYU.secar && a.cat === 'seca') return;
-        vacas.push({ a: a, P: P });
+        var P = A.derive(a, hoy).partoProb; if (!P || A.diffDays(P, hoy) < 0) return;
+        var ideal = A.addDays(P, -L); if (ideal > fin2) return;
+        vacas.push({ a: a, P: P, ideal: ideal });
       });
-      var T = F.map(function (d) { return { d: d, v: [] }; });
+      var T = {}; F.forEach(function (d) { T[d] = { d: d, v: [] }; });
       vacas.forEach(function (x) {
-        if (!T.length) return;
-        var t = null, mn = C.min(), mx = C.max();
-        // secado: el último día que deja al menos el mínimo (más leche). Preparto: dentro del rango, el que deja más días
-        // (entrar antes es más seguro si se adelanta el parto); si ninguno cae en el rango, el último que deja el mínimo
-        if (C.antes) T.forEach(function (y) { var n = A.diffDays(x.P, y.d); if (!t && n >= mn && n <= mx) t = y; });
-        if (!t) T.forEach(function (y) { if (A.diffDays(x.P, y.d) >= mn) t = y; });
-        if (!t) t = T[0];
-        x.n = A.diffDays(x.P, t.d); t.v.push(x);
+        var t = null, im = x.ideal.slice(0, 7);
+        // 1) un día que le deje los días justos (en cualquier mes). Secado: el último (más leche); preparto: el primero (entra antes)
+        F.forEach(function (d) { var n = A.diffDays(x.P, d); if (n >= mn && n <= mx && (!t || !C.antes)) t = d; });
+        // 2) si no, el último día de su mes que deje el mínimo (o de un mes anterior sin pasarse demasiado); si ninguno, el primero de su mes (en rojo)
+        if (!t) F.forEach(function (d) { var n = A.diffDays(x.P, d); if (n >= mn && (d.slice(0, 7) === im || (d.slice(0, 7) < im && n <= mx + 15))) t = d; });
+        if (!t) F.forEach(function (d) { if (!t && d.slice(0, 7) === im) t = d; });
+        if (!t) return;
+        x.d = t; x.n = A.diffDays(x.P, t); T[t].v.push(x);
       });
-      T.forEach(function (t) { t.v.sort(function (x, y) { return numRp(x.a, y.a); }); });
-      return { M: M, T: T, vacas: vacas, L: L };
+      var TM = F.filter(function (d) { return d.slice(0, 7) === M.m; }).map(function (d) { T[d].v.sort(function (x, y) { return numRp(x.a, y.a); }); return T[d]; });
+      // las del mes: día ideal en el mes (el mes en curso suma las atrasadas); sin día todavía: las que no quedaron en ninguna tanda
+      var delMes = vacas.filter(function (x) { return x.ideal <= M.fin && (state.ayuOff ? x.ideal >= M.m + '-01' : true); });
+      var sinDia = delMes.filter(function (x) { return !x.d; }).length;
+      var otroMes = delMes.filter(function (x) { return x.d && x.d.slice(0, 7) !== M.m; }).length;
+      return { M: M, T: TM, vacas: delMes, sinDia: sinDia, otroMes: otroMes, L: L };
     }
     function ayuMesesHTML() {
       return '<div class="ayums">' + [0, 1, 2].map(function (o) { var n = MESL[+ayuMesN(o).slice(5, 7) - 1]; return '<button class="fchip plain" data-ayum="' + o + '" aria-pressed="' + ((state.ayuOff || 0) === o) + '">' + n.charAt(0).toUpperCase() + n.slice(1) + '</button>'; }).join('') + '</div>';
@@ -6104,8 +6112,8 @@
       var cal = '<div class="aycal">' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(function (x) { return '<span class="dw">' + x + '</span>'; }).join('');
       for (var i = 0; i < off; i++) cal += '<span></span>';
       for (var d = 1; d <= M.ult; d++) {
-        var f = M.m + '-' + (d < 10 ? '0' : '') + d, l = f < M.ini ? null : lab(f);
-        if (f < M.ini) cal += '<span class="pas">' + d + '</span>';
+        var f = M.m + '-' + (d < 10 ? '0' : '') + d, l = lab(f);
+        if (f < M.ini) cal += '<span class="pas' + (l && l.c ? ' ' + l.c : '') + '">' + d + (l && l.s != null ? '<small>' + l.s + '</small>' : '') + '</span>';
         else cal += '<button class="ayd' + (l ? ' ' + l.c : '') + (f === hoy ? ' hoy' : '') + '" data-ayud="' + f + '">' + d + (l && l.s != null ? '<small>' + l.s + '</small>' : '') + '</button>';
       }
       return '<section class="card aycard"><h2 class="aymt">' + mesN.charAt(0).toUpperCase() + mesN.slice(1) + ' ' + M.m.slice(0, 4) + '</h2>' + cal + '</div></section>';
@@ -6123,10 +6131,11 @@
       var h = '<div class="ayu">' + volver + '<h1 class="ptitle">' + C.t + '</h1>' + ayuMesesHTML() +
         '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (' + (C.antes ? 'de ' + C.min() + ' a ' + L : 'a ' + L) + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
         ayuCalHTML(M, function (f) { return cnt[f] != null ? { c: 'on', s: cnt[f] + ' v' } : null; });
+      if (D.otroMes || D.sinDia) h += '<p class="cap ayinfo">' + [D.otroMes ? D.otroMes + ' ya ' + (D.otroMes === 1 ? 'quedó' : 'quedaron') + ' en una tanda de otro mes' : '', D.sinDia ? '<b>' + D.sinDia + ' sin día todavía</b>' : ''].filter(Boolean).join(' · ') + '</p>';
       if (!D.T.length) h += '<p class="hint">' + (D.vacas.length ? 'Marcá en el almanaque los días y la app reparte las vacas.' : 'No hay preñadas que lleguen ' + C.vb + ' en ' + mesN + '.') + '</p>';
       D.T.forEach(function (t) {
         var ns = t.v.map(function (x) { return x.n; }), mn = Math.min.apply(null, ns), mx = Math.max.apply(null, ns), nr = ns.filter(function (n) { return n < MN; }).length;
-        h += '<section class="card aytan"><div class="ayth"><h2>' + ayuDia(t.d) + '</h2><span class="count">' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '</span></div>' +
+        h += '<section class="card aytan' + (t.d < today() ? ' hecha' : '') + '"><div class="ayth"><h2>' + ayuDia(t.d) + (t.d < today() ? ' <small class="ayhecha">ya pasó</small>' : '') + '</h2><span class="count">' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '</span></div>' +
           (t.v.length ? '<p class="cap">' + (mn === mx ? mn : mn + ' a ' + mx) + ' días ' + C.u + (nr ? ' · <b class="ayr">' + nr + ' con menos de ' + MN + '</b>' : '') + '</p><div class="aychips">' +
             t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return '<button class="aych ' + col(x.n) + (pt ? ' alr' : '') + '" data-rp="' + esc(x.a.rp) + '"><b>' + esc(x.a.rp) + '</b><small>' + (x.a.cat === 'vaquillona' ? 'vaq · ' : '') + x.n + ' d</small></button>'; }).join('') + '</div>'
             : '<p class="cap">Ningún animal para este día.</p>') + '</section>';
