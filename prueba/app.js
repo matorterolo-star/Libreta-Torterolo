@@ -1570,6 +1570,7 @@
       var t = A.tareas(DB.animales.filter(function (a) { return a.cat !== 'ternera'; }), today(), state.ventana), vtxt = (VENT.filter(function (v) { return v[0] === state.ventana; })[0] || [0, ''])[1];
       var fs = fechaSecado(), sLts = secLts(), sec = listaSecar(fs, sLts);
       state.secarLista = sec;
+      var nSel = sec.filter(secSel).length;
       var secChips = '<div class="secsel"><span>Secar a</span>' + SECS.map(function (n) { return '<button class="fchip plain" data-sec="' + n + '" aria-pressed="' + (A.SECADO === n) + '">' + n + '</button>'; }).join('') + '<span>días del parto</span></div>';
       var ltsChips = '<div class="secsel"><span>Menos de</span>' + SECLTS.map(function (n) { return '<button class="fchip plain" data-seclts="' + n + '" aria-pressed="' + (sLts === n) + '">' + n + '</button>'; }).join('') + '<span>litros</span></div>';
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
@@ -1587,10 +1588,12 @@
         })() +
         secTareas('secar', 'Para secar', '<label class="secfecha">Fecha de secado <input type="date" id="fsec" value="' + fs + '" min="' + today() + '"></label>' + secChips + ltsChips +
           '<p class="secnote">Vacas preñadas en ordeñe que el ' + A.fmt(fs) + ' están a ' + A.SECADO + ' días o menos del parto, o que dieron menos de ' + sLts + ' litros en el último control. Ordenadas por caravana. Con la alerta, las que tuvieron celo o servicio después del tacto preñada: confirmar la preñez antes de secar.</p>' +
-          ('<button class="btn share" data-a="compsecar"' + (sec.length ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar lista por WhatsApp</button>'), sec, function (x) {
+          ('<button class="btn share" id="secenv" data-a="compsecar"' + (nSel ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>' + envTxt(nSel) + '</span></button><p class="secselnote">Tocá la casilla para sumarla o sacarla del mensaje.</p>'), sec, function (x) {
           var lt = x.lt != null ? nf(x.lt, 1) + ' lts' : '', pt = postTacto(x.a);
           var al = pt ? '<span class="alr"><b>' + (pt[1] === 'S' ? 'Preñada + servicio' : 'Preñada + celo') + (pt[0] ? ' ' + A.fmt(pt[0]).slice(0, 5) : '') + '</b>' + ALR_SVG + '</span><br>' : '';
-          return rowHTML(x.a, { right: '<span class="when">' + (x.porF ? x.dp + ' días al parto' : lt) + '</span>', sub: al + (x.P ? 'Parto probable ' + A.fmt(x.P) : 'Preñada') + (x.porF ? (lt ? ' · ' + lt : '') : x.dp != null ? ' · ' + x.dp + ' días al parto' : '') });
+          var on = secSel(x), rp = esc(x.a.rp);
+          return '<div class="selw' + (on ? '' : ' off') + '">' + rowHTML(x.a, { right: '<span class="secrt"><span class="secpill ' + (x.porF ? 'pp">Por preñez' : 'pl">Por leche') + '</span><span class="when">' + (x.porF ? x.dp + ' días al parto' : lt) + '</span></span>', sub: al + (x.P ? 'Parto probable ' + A.fmt(x.P) : 'Preñada') + (x.porF ? (lt ? ' · ' + lt : '') : x.dp != null ? ' · ' + x.dp + ' días al parto' : '') }) +
+            '<span class="secck" data-secck="' + rp + '" role="checkbox" aria-checked="' + on + '" aria-label="Incluir ' + rp + ' en el mensaje"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>';
         }, 'Ninguna vaca para secar el ' + A.fmt(fs) + ' ni con menos de ' + sLts + ' litros.') +
         secTareas('partos', 'Próximos partos', chips + '<p class="secnote">Partos probables en los próximos ' + vtxt + '.</p>', t.partos, function (x) {
           return rowHTML(x.a, { right: '<span class="when">' + A.rel(x.dias) + '</span>', sub: 'Parto probable ' + A.fmt(x.fecha) });
@@ -1694,8 +1697,18 @@
       listaSecadoLts(lim).forEach(function (x) { if (M[x.a.rp]) M[x.a.rp].porL = true; else M[x.a.rp] = { a: x.a, P: x.P, dp: x.P ? A.diffDays(x.P, f) : null, lt: x.lt, porL: true }; });
       return Object.keys(M).map(function (k) { return M[k]; }).sort(function (x, y) { return numRp(x.a, y.a); });
     }
+    // selección para el mensaje: por defecto van marcadas las de por preñez y sin marcar las de por leche; el veterinario elige
+    function secSel(x) { var m = state.secSel || {}; return m[x.a.rp] != null ? m[x.a.rp] : !!x.porF; }
+    function envTxt(n) { return n ? 'Enviar ' + n + (n === 1 ? ' vaca' : ' vacas') + ' por WhatsApp' : 'Marcá las vacas para enviar'; }
+    function secToggle(el) {
+      var rp = el.dataset.secck, x = (state.secarLista || []).filter(function (y) { return String(y.a.rp) === rp; })[0]; if (!x) return;
+      state.secSel = state.secSel || {}; var on = !secSel(x); state.secSel[x.a.rp] = on;
+      el.setAttribute('aria-checked', on); el.parentNode.classList.toggle('off', !on);
+      var n = state.secarLista.filter(secSel).length, b = document.getElementById('secenv');
+      if (b) { b.disabled = !n; b.querySelector('span').textContent = envTxt(n); }
+    }
     function compartirSecar() {
-      var L = state.secarLista || [];
+      var L = (state.secarLista || []).filter(secSel); if (!L.length) return;
       var txt = '*Vacas para secar' + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' +
         'Secado del ' + A.fmt(state.fsec) + ' · hasta ' + A.SECADO + ' días antes del parto o menos de ' + secLts() + ' litros\n\n' +
         L.map(function (x) { return '*' + x.a.rp + '*' + (x.P ? ' · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)' : '') + (x.porL ? ' · ' + nf(x.lt, 1) + ' lts' : '') + (function () { var pt = postTacto(x.a); return pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') + (pt[0] ? ' ' + A.fmt(pt[0]).slice(0, 5) : '') : ''; })(); }).join('\n') +
@@ -6346,6 +6359,7 @@
       if (cpt) { ctlToque(cpt, e); return; }
       if ((cpt = e.target.closest('[data-ctlmax]'))) { setP('ctlmax', cpt.dataset.ctlmax); render(); return; }
       if ((cpt = e.target.closest('[data-ctlmas]'))) { var mm = cpt.previousElementSibling; if (mm) mm.hidden = false; cpt.remove(); return; }
+      if ((cpt = e.target.closest('[data-secck]'))) { secToggle(cpt); return; }
       var row = e.target.closest('[data-rp]');
       if (row) { openFicha(row.getAttribute('data-rp')); return; }
       var el;
