@@ -1586,10 +1586,11 @@
             secTareas('tactarvq', 'Para tactar · vaquillonas', nota, vq, rowT, 'No hay vaquillonas pendientes de tacto.');
         })() +
         secTareas('secar', 'Para secar', '<label class="secfecha">Fecha de secado <input type="date" id="fsec" value="' + fs + '" min="' + today() + '"></label>' + secChips + ltsChips +
-          '<p class="secnote">Vacas preñadas en ordeñe que el ' + A.fmt(fs) + ' están a ' + A.SECADO + ' días o menos del parto, o que dieron menos de ' + sLts + ' litros en el último control. Ordenadas por caravana.</p>' +
+          '<p class="secnote">Vacas preñadas en ordeñe que el ' + A.fmt(fs) + ' están a ' + A.SECADO + ' días o menos del parto, o que dieron menos de ' + sLts + ' litros en el último control. Ordenadas por caravana. Con la alerta, las que tuvieron celo o servicio después del tacto preñada: confirmar la preñez antes de secar.</p>' +
           ('<button class="btn share" data-a="compsecar"' + (sec.length ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar lista por WhatsApp</button>'), sec, function (x) {
-          var lt = x.lt != null ? nf(x.lt, 1) + ' lts' : '';
-          return rowHTML(x.a, { right: '<span class="when">' + (x.porF ? x.dp + ' días al parto' : lt) + '</span>', sub: (x.P ? 'Parto probable ' + A.fmt(x.P) : 'Preñada') + (x.porF ? (lt ? ' · ' + lt : '') : x.dp != null ? ' · ' + x.dp + ' días al parto' : '') });
+          var lt = x.lt != null ? nf(x.lt, 1) + ' lts' : '', pt = postTacto(x.a);
+          var al = pt ? '<span class="alr"><b>' + (pt[1] === 'S' ? 'Preñada + servicio' : 'Preñada + celo') + (pt[0] ? ' ' + A.fmt(pt[0]).slice(0, 5) : '') + '</b>' + ALR_SVG + '</span><br>' : '';
+          return rowHTML(x.a, { right: '<span class="when">' + (x.porF ? x.dp + ' días al parto' : lt) + '</span>', sub: al + (x.P ? 'Parto probable ' + A.fmt(x.P) : 'Preñada') + (x.porF ? (lt ? ' · ' + lt : '') : x.dp != null ? ' · ' + x.dp + ' días al parto' : '') });
         }, 'Ninguna vaca para secar el ' + A.fmt(fs) + ' ni con menos de ' + sLts + ' litros.') +
         secTareas('partos', 'Próximos partos', chips + '<p class="secnote">Partos probables en los próximos ' + vtxt + '.</p>', t.partos, function (x) {
           return rowHTML(x.a, { right: '<span class="when">' + A.rel(x.dias) + '</span>', sub: 'Parto probable ' + A.fmt(x.fecha) });
@@ -1697,7 +1698,7 @@
       var L = state.secarLista || [];
       var txt = '*Vacas para secar' + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' +
         'Secado del ' + A.fmt(state.fsec) + ' · hasta ' + A.SECADO + ' días antes del parto o menos de ' + secLts() + ' litros\n\n' +
-        L.map(function (x) { return '*' + x.a.rp + '*' + (x.P ? ' · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)' : '') + (x.porL ? ' · ' + nf(x.lt, 1) + ' lts' : ''); }).join('\n') +
+        L.map(function (x) { return '*' + x.a.rp + '*' + (x.P ? ' · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)' : '') + (x.porL ? ' · ' + nf(x.lt, 1) + ' lts' : '') + (function () { var pt = postTacto(x.a); return pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') + (pt[0] ? ' ' + A.fmt(pt[0]).slice(0, 5) : '') : ''; })(); }).join('\n') +
         '\n\nTotal: ' + L.length + (L.length === 1 ? ' vaca' : ' vacas') + '\nDr. Mauro Torterolo';
       if (navigator.share) navigator.share({ text: txt }).catch(function () {});
       else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
@@ -6013,6 +6014,7 @@
     function planillaFila(a, ref, simple, secar) {
       var dl = a.pFecha ? A.diffDays(ref, a.pFecha) : '';
       var ev = prenConEvento(a);
+      if (ev && simple && !a.rech) { var lt0 = (a.pr || [])[0]; if ((secar && secar[a.rp]) || (typeof lt0 === 'number' && lt0 < secLts())) return [ev[1] === 'S' ? 'SECAR+SERV' : 'SECAR+CELO', A.diffDays(ref, ev[0]), true]; }
       if (ev && !(simple && a.rech)) return [ev[1] === 'S' ? 'PREÑ+SERV' : 'PREÑ+CELO', A.diffDays(ref, ev[0]), true];
       if (a.rech) return simple ? null : ['DESCARTE', ''];
       if (a.estado === 'prenada') {
@@ -6240,11 +6242,11 @@
       var nombre = ((simple ? 'Tacto simple ' : 'Tacto ') + (PERFIL.nombre || '') + ' ' + ref).replace(/[\\/:*?"<>|]+/g, '').trim() + '.xlsx', file = null;
       try { file = new File([blob], nombre, { type: blob.type }); } catch (e) {}
       state.xout = { blob: blob, file: file, csv: null, nombre: nombre };
-      var cu = {}, nAl = 0; L.forEach(function (a) { var f = F[a.rp][0]; if (F[a.rp][2]) nAl++; var k = /^\d\d-/.test(f) ? 'Preñadas' : f === 'PARCHE' ? 'Parche' : f === 'REVISAR' ? 'Revisar' : f === 'PARIDA' ? 'Paridas' : f === 'DESCARTE' ? 'Descarte' : f === 'SECAR' || f === 'SECAR LTS' ? 'Para secar' : /^PREÑ\+/.test(f) ? 'Preñadas con celo o servicio' : 'Con tacto sin preñez'; cu[k] = (cu[k] || 0) + 1; });
+      var cu = {}, nAl = 0; L.forEach(function (a) { var f = F[a.rp][0]; if (F[a.rp][2]) nAl++; var k = /^\d\d-/.test(f) ? 'Preñadas' : f === 'PARCHE' ? 'Parche' : f === 'REVISAR' ? 'Revisar' : f === 'PARIDA' ? 'Paridas' : f === 'DESCARTE' ? 'Descarte' : f === 'SECAR' || f === 'SECAR LTS' || /^SECAR\+/.test(f) ? 'Para secar' : /^PREÑ\+/.test(f) ? 'Preñadas con celo o servicio' : 'Con tacto sin preñez'; cu[k] = (cu[k] || 0) + 1; });
       $('#sheetXTitle').textContent = (simple ? 'Planilla simple · ' : 'Planilla completa · ') + L.length + ' vacas';
       $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 6px">Vacas en ordeñe por caravana, en tres columnas para imprimir (' + pags + (pags === 1 ? ' hoja' : ' hojas') + ').' + (simple ? ' Sin preñadas, descartes ni paridas de menos de ' + PLT_PARIDA + ' días.' : '') + '</p>' +
         (nAl ? '<p class="ralerta">⚠ ' + nAl + (nAl === 1 ? ' vaca preñada tiene' : ' vacas preñadas tienen') + ' celo o servicio después del tacto (en rojo en la planilla).</p>' : '') +
-        '<details class="nota"><summary>Qué dice cada vaca</summary><p class="cap">' + (simple ? '' : 'Preñada: fecha probable de parto · ') + 'REVISAR: servida hace ' + A.DX_MIN + ' días o más · PARCHE: servida hace menos de ' + A.DX_MIN + ' días (el número son los días de servida) · PARIDA: sin servicio ni tacto, con los días de parida · con tacto sin preñez: el resultado y los días de parida · ' + (simple ? 'SECAR: preñada para secar el ' + A.fmt(fechaSecado()) + ' (días al parto) · SECAR LTS: preñada con menos de ' + secLts() + ' litros en el último control · ' : 'DESCARTE · ') + 'PREÑ+CELO / PREÑ+SERV: preñada con celo o servicio después del tacto (días desde ese celo o servicio). Al lado de cada vaca queda una columna en blanco para anotar.</p></details>' +
+        '<details class="nota"><summary>Qué dice cada vaca</summary><p class="cap">' + (simple ? '' : 'Preñada: fecha probable de parto · ') + 'REVISAR: servida hace ' + A.DX_MIN + ' días o más · PARCHE: servida hace menos de ' + A.DX_MIN + ' días (el número son los días de servida) · PARIDA: sin servicio ni tacto, con los días de parida · con tacto sin preñez: el resultado y los días de parida · ' + (simple ? 'SECAR: preñada para secar el ' + A.fmt(fechaSecado()) + ' (días al parto) · SECAR LTS: preñada con menos de ' + secLts() + ' litros en el último control · ' : 'DESCARTE · ') + 'PREÑ+CELO / PREÑ+SERV: preñada con celo o servicio después del tacto (días desde ese celo o servicio)' + (simple ? ' · SECAR+CELO / SECAR+SERV: lo mismo, en una vaca que hay que secar' : '') + '. Al lado de cada vaca queda una columna en blanco para anotar.</p></details>' +
         '<p class="cap">' + ['Revisar', 'Parche', 'Paridas', 'Con tacto sin preñez', 'Para secar', 'Preñadas con celo o servicio', 'Preñadas', 'Descarte'].filter(function (k) { return cu[k]; }).map(function (k) { return '<b>' + cu[k] + '</b> ' + k.toLowerCase(); }).join(' · ') + '</p>' +
         '<div class="xprev">' + L.map(function (a) { var f = F[a.rp]; return '<div><b>' + esc(a.rp) + '</b><span' + (f[2] ? ' style="color:var(--vacia);font-weight:700"' : '') + '>' + esc(f[0] + (f[1] !== '' ? ' ' + String(f[1]).replace('.', ',') : '')) + '</span></div>'; }).join('') + '</div><p class="cap">Archivo: ' + esc(nombre) + '</p>';
       var puede = !!(navigator.share && file);
