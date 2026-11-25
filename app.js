@@ -5524,7 +5524,7 @@
         r.iniAnt = iniAnt; r.finAnt = finAnt;
         if (iniAnt >= (DB.desdeHist != null ? DB.desdeHist : A.addDays(ref, -730))) r.TA = suma(A.ciclos21(an, esPren, iniAnt, pev, finAnt));
         r.vacas = DB.animales.filter(function (a) { return !a.cat || a.cat === 'vaca' || a.cat === 'seca'; }).length;
-        var D = infDatos('12'); r.ips = D.ips; r.ipp = D.ipp; r.spp = D.spp; r.pg = D.pg; r.vo = D.avo; r.vs = D.avs;
+        var D = infDatos('12'); r.ips = D.ips; r.ipp = D.ipp; r.spp = D.spp; r.pg = D.pg; r.vo = D.avo; r.vs = D.avs; r.vm = D.avm;
         r.mk = D.M.map(function (m) { return m.key; }); r.pv = D.pv; r.pq = D.pq; r.best = D.best;
         // leche: último control y promedio de los últimos 12 meses (litros por vaca en ordeñe)
         var porF = rondasCtrl((DB.ctrls || []).filter(function (c) { return !DB.sel || !DB.sel.length || DB.sel.indexOf(c[1]) >= 0; }));
@@ -5719,7 +5719,8 @@
       if (fin) {
         var MK = []; for (var i = 11; i >= 0; i--) { var yy = +fin.slice(0, 4), mm = +fin.slice(5, 7) - i; while (mm < 1) { mm += 12; yy--; } MK.push({ key: yy + '-' + pad2(mm), label: A.MESES[mm - 1], anio: yy }); }
         var den = 0, sv = MK.map(function () { return 0; }), sq = sv.slice();
-        var vmf = function (f) { return (f.vo || 0) + (f.vs || 0); };
+        // mismo denominador que la tarjeta Partos del tambo: vaca masa promedio (ordeñe + secas + vacas con historia incompleta)
+        var vmf = function (f) { return f.vm != null ? f.vm : (f.vo || 0) + (f.vs || 0); };
         F.forEach(function (f) { if (!f.mk || !vmf(f)) return; den += vmf(f); f.mk.forEach(function (k, j) { var ix = -1; MK.forEach(function (m, q) { if (m.key === k) ix = q; }); if (ix >= 0) { sv[ix] += f.pv[j]; sq[ix] += f.pq[j]; } }); });
         var pv = sv.map(function (x) { return den ? x / den * 100 : null; }), pq = sq.map(function (x) { return den ? x / den * 100 : null; });
         var tv = sv.reduce(function (s, x) { return s + x; }, 0), tq = sq.reduce(function (s, x) { return s + x; }, 0);
@@ -5729,7 +5730,7 @@
           '<div class="kpis"><div><b>' + v(den ? tv / den * 100 : null) + '%</b><span>Vacas</span></div><div><b>' + v(den ? tq / den * 100 : null) + '%</b><span>Vaquillonas</span></div><div class="tp"><b>' + v(den ? (tv + tq) / den * 100 : null) + '%</b><span>Total</span></div></div>' +
           '<div class="mleg"><span><i class="pv1"></i>Vacas</span><span><i class="pv3"></i>Vaquillonas</span></div>' +
           '<div class="pchart">' + infBarras(MK, [{ v: pv.map(function (x) { return x == null ? null : Math.round(x * 10) / 10; }), c: 'b1' }, { v: pq.map(function (x) { return x == null ? null : Math.round(x * 10) / 10; }), c: 'b3' }], 190, { valores: false }) + '</div>' +
-          '<p class="cap">Partos de cada mes en % de las vacas promedio (en ordeñe + secas) de la población. Sin abortos. El último mes puede estar incompleto según la fecha del respaldo.</p>' +
+          '<p class="cap">Partos de cada mes en % de la vaca masa promedio (en ordeñe + secas) de la población, la misma cuenta que la tarjeta Partos de cada tambo. Sin abortos. El último mes puede estar incompleto según la fecha del respaldo.</p>' +
           '<div class="pscroll"><table class="tbl ptbl"><thead><tr><th>Tambo</th><th>Vacas</th><th>Vaquillonas</th><th>Total</th><th>Mes con más partos</th><th>Mejores 6 meses seguidos</th></tr></thead><tbody>' +
           R4.map(function (f) {
             var d = vmf(f), a1 = sum(f.pv), a2 = sum(f.pq), tt = a1 + a2, pk = 0;
