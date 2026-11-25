@@ -1578,7 +1578,7 @@
       }).join('') + '</div>';
       var GT = [], grp = function (t, html) { if (html) GT.push([t, html]); return ''; };
       var lrow = function (a, t, d) { return '<button class="lrow" data-a="' + a + '"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="pttl"><h2>' + t + '</h2><small class="pdesc">' + d + '</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'; };
-      return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana ' + VTAG + '</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + '<button class="voyent ayuent" data-a="ayu"><span><b>Yo te ayudo</b><small>Programar los secados del mes</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' + grp('Para hacer',
+      return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana ' + VTAG + '</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + '<button class="voyent ayuent" data-a="ayu"><span><b>Yo te ayudo</b><small>Secados, preparto y cuándo llamar al veterinario</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' + grp('Para hacer',
         (function () {
           var rowT = function (x) { return rowHTML(x.a, { right: '<span class="when late">hace ' + x.dias + ' días</span>', sub: 'Servicio ' + A.fmt(x.fecha) + (x.a.toro && !/^celo/i.test(x.a.toro) ? ' · ' + esc(x.a.toro) : '') }); };
           var nota = 'Servidas hace ' + A.DX_MIN + ' días o más, sin tacto posterior.';
@@ -6049,84 +6049,142 @@
       Object.keys(porDia).forEach(function (d) { if (porDia[d] >= TMIN && (!ut || d > ut)) ut = d; });
       return { f: ut, n: ut ? porDia[ut] : null };
     }
-    /* ----- Yo te ayudo: programar los secados por preñez del mes. El productor toca en el almanaque los días que va a secar;
-       la app reparte las preñadas cuyo secado ideal (parto probable − días de la perilla) cae en el mes: cada vaca va al último
-       día marcado que todavía le deja los días de seca de la perilla; si ninguno se los deja, va al primero (en rojo).
-       Rojo: menos días de seca que la perilla; amarillo: más de perilla + 15. Los días quedan guardados por tambo y mes. ----- */
+    /* ----- Yo te ayudo: arma el trabajo con lo que ya está en la base. Tres ayudas:
+       · Programar secados / Entradas a preparto: el productor toca en el almanaque los días; la app reparte las preñadas cuyo día
+         ideal (parto probable − días de seca o de preparto) cae en el mes: cada una va al último día marcado que todavía le deja
+         esos días antes del parto; si ninguno se los deja, va al primero (en rojo). Amarillo: más de 15 (secado) o 7 (preparto) días de más.
+       · ¿Cuándo llamo al veterinario?: para cada día, cuántas servidas tendrían 35 días o más de servidas (vacas y vaquillonas aparte).
+       Los días marcados quedan guardados por tambo y mes. ----- */
     var AYU_DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    var AYU = {
+      secar: { t: 'Programar secados', s: 'Repartí los secados del mes en los días que elijas', lead: function () { return A.SECADO; }, tol: 15, u: 'de seca', vb: 'al secado', k: 'ayusec',
+        ok: function (a) { return a.cat === 'vaca' || !a.cat; } },
+      pre: { t: 'Entradas a preparto', s: 'Qué vacas y vaquillonas entran al preparto cada día', lead: function () { return A.PREPARTO; }, tol: 7, u: 'de preparto', vb: 'al preparto', k: 'ayupre',
+        ok: function (a) { return a.cat === 'vaca' || a.cat === 'seca' || a.cat === 'vaquillona' || !a.cat; } },
+      tacto: { t: '¿Cuándo llamo al veterinario?', s: 'Cuántas vacas habría para tactar según el día' }
+    };
+    function ayuDia(f) { var d = AYU_DIAS[new Date(f + 'T12:00:00').getDay()]; return d.charAt(0).toUpperCase() + d.slice(1) + ' ' + A.fmt(f).slice(0, 5); }
+    function ayuMesN(o) { var d = new Date(today().slice(0, 7) + '-15T12:00:00'); d.setMonth(d.getMonth() + o); return d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1); }
     function ayuMes() {
       var hoy = today(), o = state.ayuOff || 0, m = ayuMesN(o);
       var ult = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
       return { m: m, ini: o ? m + '-01' : hoy, fin: m + '-' + (ult < 10 ? '0' : '') + ult, ult: ult };
     }
-    function ayuMesN(o) { var d = new Date(today().slice(0, 7) + '-15T12:00:00'); d.setMonth(d.getMonth() + o); return d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1); }
-    function ayuFechas(m) { var v = []; try { v = JSON.parse(getP('ayusec:' + m) || '[]'); } catch (e) {} return (v || []).filter(function (d) { return typeof d === 'string' && d.slice(0, 7) === m; }).sort(); }
-    function ayuDatos() {
-      var M = ayuMes(), F = ayuFechas(M.m).filter(function (d) { return d >= M.ini; }), hoy = today(), vacas = [];
+    function ayuFechas(k, m) { var v = []; try { v = JSON.parse(getP(k + ':' + m) || '[]'); } catch (e) {} return (v || []).filter(function (d) { return typeof d === 'string' && d.slice(0, 7) === m; }).sort(); }
+    function ayuDatos(C) {
+      var M = ayuMes(), F = ayuFechas(C.k, M.m).filter(function (d) { return d >= M.ini; }), hoy = today(), L = C.lead(), vacas = [];
       DB.animales.forEach(function (a) {
-        if (a.estado !== 'prenada' || a.rech || (a.cat && a.cat !== 'vaca')) return;
-        var P = A.derive(a, hoy).partoProb; if (!P) return;
-        var ideal = A.addDays(P, -A.SECADO);
-        // este mes: también las atrasadas (secado ideal ya pasado y siguen en ordeñe); próximo mes: solo las de ese mes
+        if (a.estado !== 'prenada' || a.rech || !C.ok(a)) return;
+        var P = A.derive(a, hoy).partoProb; if (!P || A.diffDays(P, hoy) < 0) return;
+        var ideal = A.addDays(P, -L);
+        // mes en curso: también las atrasadas (día ideal ya pasado); los meses siguientes: solo las de ese mes
         if (ideal > M.fin || (state.ayuOff && ideal < M.ini)) return;
-        if (A.diffDays(P, hoy) < 0) return;
-        vacas.push({ a: a, P: P, ideal: ideal });
+        // las que ya están secas no se vuelven a secar
+        if (C === AYU.secar && a.cat === 'seca') return;
+        vacas.push({ a: a, P: P });
       });
       var T = F.map(function (d) { return { d: d, v: [] }; });
       vacas.forEach(function (x) {
         if (!T.length) return;
-        var t = null; T.forEach(function (y) { if (A.diffDays(x.P, y.d) >= A.SECADO) t = y; });
+        var t = null; T.forEach(function (y) { if (A.diffDays(x.P, y.d) >= L) t = y; });
         if (!t) t = T[0];
-        x.seca = A.diffDays(x.P, t.d); t.v.push(x);
+        x.n = A.diffDays(x.P, t.d); t.v.push(x);
       });
       T.forEach(function (t) { t.v.sort(function (x, y) { return numRp(x.a, y.a); }); });
-      return { M: M, F: F, T: T, vacas: vacas };
+      return { M: M, T: T, vacas: vacas, L: L };
     }
-    function ayuCol(n) { return n < A.SECADO ? 'r' : n > A.SECADO + 15 ? 'a' : 'v'; }
-    function ayuHTML() {
-      var D = ayuDatos(), M = D.M, hoy = today();
-      var volver = '<button class="backbtn" data-a="ayucerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>';
-      var mesN = MESL[+M.m.slice(5, 7) - 1]; mesN = mesN.charAt(0).toUpperCase() + mesN.slice(1);
-      var h = '<div class="ayu">' + volver + '<h1 class="ptitle">Programar secados</h1>' +
-        '<div class="ayums">' + [0, 1, 2].map(function (o) { var n = MESL[+ayuMesN(o).slice(5, 7) - 1]; return '<button class="fchip plain" data-ayum="' + o + '" aria-pressed="' + ((state.ayuOff || 0) === o) + '">' + n.charAt(0).toUpperCase() + n.slice(1) + '</button>'; }).join('') + '</div>' +
-        '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' vaca preñada llega' : ' vacas preñadas llegan') + ' al secado en ' + mesN.toLowerCase() + ' (a ' + A.SECADO + ' días del parto). Tocá en el almanaque los días que vas a secar; tocá de nuevo para sacarlo.</p>';
-      // almanaque
-      var off = (new Date(M.m + '-01T12:00:00').getDay() + 6) % 7, cnt = {};
-      D.T.forEach(function (t) { cnt[t.d] = t.v.length; });
+    function ayuMesesHTML() {
+      return '<div class="ayums">' + [0, 1, 2].map(function (o) { var n = MESL[+ayuMesN(o).slice(5, 7) - 1]; return '<button class="fchip plain" data-ayum="' + o + '" aria-pressed="' + ((state.ayuOff || 0) === o) + '">' + n.charAt(0).toUpperCase() + n.slice(1) + '</button>'; }).join('') + '</div>';
+    }
+    // almanaque del mes: lab(f) devuelve null (día común) o { c: clase, s: texto chico }
+    function ayuCalHTML(M, lab) {
+      var hoy = today(), mesN = MESL[+M.m.slice(5, 7) - 1], off = (new Date(M.m + '-01T12:00:00').getDay() + 6) % 7;
       var cal = '<div class="aycal">' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(function (x) { return '<span class="dw">' + x + '</span>'; }).join('');
       for (var i = 0; i < off; i++) cal += '<span></span>';
       for (var d = 1; d <= M.ult; d++) {
-        var f = M.m + '-' + (d < 10 ? '0' : '') + d;
+        var f = M.m + '-' + (d < 10 ? '0' : '') + d, l = f < M.ini ? null : lab(f);
         if (f < M.ini) cal += '<span class="pas">' + d + '</span>';
-        else cal += '<button class="ayd' + (cnt[f] != null ? ' on' : '') + (f === hoy ? ' hoy' : '') + '" data-ayud="' + f + '">' + d + (cnt[f] != null ? '<small>' + cnt[f] + ' v</small>' : '') + '</button>';
+        else cal += '<button class="ayd' + (l ? ' ' + l.c : '') + (f === hoy ? ' hoy' : '') + '" data-ayud="' + f + '">' + d + (l && l.s != null ? '<small>' + l.s + '</small>' : '') + '</button>';
       }
-      h += '<section class="card aycard"><h2 class="aymt">' + mesN + ' ' + M.m.slice(0, 4) + '</h2>' + cal + '</div></section>';
-      if (!D.T.length) h += '<p class="hint">' + (D.vacas.length ? 'Marcá en el almanaque los días de secado y la app reparte las vacas.' : 'No hay vacas preñadas para secar en ' + mesN.toLowerCase() + '.') + '</p>';
+      return '<section class="card aycard"><h2 class="aymt">' + mesN.charAt(0).toUpperCase() + mesN.slice(1) + ' ' + M.m.slice(0, 4) + '</h2>' + cal + '</div></section>';
+    }
+    var AYU_FLECHA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    var AYU_ENV = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    function ayuHTML() {
+      var volver = '<button class="backbtn" data-a="ayucerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>';
+      var k = state.ayu;
+      if (!AYU[k]) return '<div class="ayu">' + volver + '<h1 class="ptitle">Yo te ayudo</h1><p class="secnote">La app arma el trabajo con los datos del tambo.</p>' +
+        ['secar', 'pre', 'tacto'].map(function (x) { return '<button class="ayuop" data-ayuk="' + x + '"><span><b>' + AYU[x].t + '</b><small>' + AYU[x].s + '</small></span>' + AYU_FLECHA + '</button>'; }).join('') + '</div>';
+      if (k === 'tacto') return ayuTactoHTML(volver);
+      var C = AYU[k], D = ayuDatos(C), M = D.M, L = D.L, mesN = MESL[+M.m.slice(5, 7) - 1], cnt = {};
+      D.T.forEach(function (t) { cnt[t.d] = t.v.length; });
+      var col = function (n) { return n < L ? 'r' : n > L + C.tol ? 'a' : 'v'; };
+      var h = '<div class="ayu">' + volver + '<h1 class="ptitle">' + C.t + '</h1>' + ayuMesesHTML() +
+        '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (a ' + L + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
+        ayuCalHTML(M, function (f) { return cnt[f] != null ? { c: 'on', s: cnt[f] + ' v' } : null; });
+      if (!D.T.length) h += '<p class="hint">' + (D.vacas.length ? 'Marcá en el almanaque los días y la app reparte las vacas.' : 'No hay preñadas que lleguen ' + C.vb + ' en ' + mesN + '.') + '</p>';
       D.T.forEach(function (t) {
-        var dd = AYU_DIAS[new Date(t.d + 'T12:00:00').getDay()], nr = t.v.filter(function (x) { return x.seca < A.SECADO; }).length;
-        var mn = t.v.length ? Math.min.apply(null, t.v.map(function (x) { return x.seca; })) : null, mx = t.v.length ? Math.max.apply(null, t.v.map(function (x) { return x.seca; })) : null;
-        h += '<section class="card aytan"><div class="ayth"><h2>' + dd.charAt(0).toUpperCase() + dd.slice(1) + ' ' + A.fmt(t.d).slice(0, 5) + '</h2><span class="count">' + t.v.length + (t.v.length === 1 ? ' vaca' : ' vacas') + '</span></div>' +
-          (t.v.length ? '<p class="cap">' + (mn === mx ? mn : mn + ' a ' + mx) + ' días de seca' + (nr ? ' · <b class="ayr">' + nr + ' con menos de ' + A.SECADO + '</b>' : '') + '</p><div class="aychips">' +
-            t.v.map(function (x) { var pt = postTacto(x.a); return '<button class="aych ' + ayuCol(x.seca) + (pt ? ' alr' : '') + '" data-rp="' + esc(x.a.rp) + '"><b>' + esc(x.a.rp) + '</b><small>' + x.seca + ' d</small></button>'; }).join('') + '</div>'
-            : '<p class="cap">Ninguna vaca para este día.</p>') + '</section>';
+        var ns = t.v.map(function (x) { return x.n; }), mn = Math.min.apply(null, ns), mx = Math.max.apply(null, ns), nr = ns.filter(function (n) { return n < L; }).length;
+        h += '<section class="card aytan"><div class="ayth"><h2>' + ayuDia(t.d) + '</h2><span class="count">' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '</span></div>' +
+          (t.v.length ? '<p class="cap">' + (mn === mx ? mn : mn + ' a ' + mx) + ' días ' + C.u + (nr ? ' · <b class="ayr">' + nr + ' con menos de ' + L + '</b>' : '') + '</p><div class="aychips">' +
+            t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return '<button class="aych ' + col(x.n) + (pt ? ' alr' : '') + '" data-rp="' + esc(x.a.rp) + '"><b>' + esc(x.a.rp) + '</b><small>' + (x.a.cat === 'vaquillona' ? 'vaq · ' : '') + x.n + ' d</small></button>'; }).join('') + '</div>'
+            : '<p class="cap">Ningún animal para este día.</p>') + '</section>';
       });
-      if (D.T.length) h += '<p class="cap ayley"><i class="v"></i>' + A.SECADO + ' a ' + (A.SECADO + 15) + ' días de seca <i class="a"></i>más de ' + (A.SECADO + 15) + ' <i class="r"></i>menos de ' + A.SECADO + ' <i class="x"></i>preñada + celo o servicio</p>' +
-        '<button class="btn share" data-a="ayuenv"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar programa por WhatsApp</button>';
+      if (D.T.length) h += '<p class="cap ayley"><i class="v"></i>' + L + ' a ' + (L + C.tol) + ' días <i class="a"></i>más de ' + (L + C.tol) + ' <i class="r"></i>menos de ' + L + (k === 'secar' ? ' <i class="x"></i>preñada + celo o servicio' : '') + '</p>' +
+        '<button class="btn share" data-a="ayuenv">' + AYU_ENV + 'Enviar por WhatsApp</button>';
+      return h + '</div>';
+    }
+    // ¿Cuándo llamo al veterinario?: servidas con 35 días o más a cada día (con lo cargado hoy)
+    function ayuTactoN(f) {
+      var v = 0, q = 0, L = [];
+      DB.animales.forEach(function (a) {
+        if (a.rech || a.estado !== 'servida' || !a.sFecha) return;
+        if (A.diffDays(f, a.sFecha) < A.DX_MIN) return;
+        if (a.cat === 'vaquillona') q++; else if (a.cat === 'vaca' || !a.cat) v++; else return;
+        L.push(a);
+      });
+      return { v: v, q: q, L: L.sort(numRp) };
+    }
+    function ayuTactoHTML(volver) {
+      var M = ayuMes(), hoy = today(), sel = state.ayuSel && state.ayuSel.slice(0, 7) === M.m && state.ayuSel >= M.ini ? state.ayuSel : null;
+      var cache = {}, get = function (f) { return cache[f] || (cache[f] = ayuTactoN(f)); };
+      var mx = 1; for (var d = 1; d <= M.ult; d++) { var f0 = M.m + '-' + (d < 10 ? '0' : '') + d; if (f0 >= M.ini) mx = Math.max(mx, get(f0).v); }
+      var ut = ultTactoVacas(hoy).f;
+      var h = '<div class="ayu">' + volver + '<h1 class="ptitle">¿Cuándo llamo al veterinario?</h1>' + ayuMesesHTML() +
+        '<p class="secnote">Cada día muestra cuántas vacas servidas tendrían ' + A.DX_MIN + ' días o más para el diagnóstico de preñez' + (ut ? ' (último tacto: ' + A.fmt(ut).slice(0, 5) + ', hace ' + A.diffDays(hoy, ut) + ' días)' : '') + '. Tocá un día para ver el detalle.</p>' +
+        ayuCalHTML(M, function (f) { var n = get(f).v, r = n / mx; return { c: 'tq' + (f === sel ? ' on' : '') + (r >= 0.75 ? ' t3' : r >= 0.4 ? ' t2' : n ? ' t1' : ''), s: n }; });
+      if (!sel) return h + '<p class="hint">Tocá un día del almanaque.</p></div>';
+      var R = get(sel), r7 = ayuTactoN(A.addDays(sel, 7));
+      var dias = ut ? A.diffDays(sel, ut) : null;
+      h += '<section class="card aytan"><div class="ayth"><h2>' + ayuDia(sel) + '</h2><span class="count">' + R.v + (R.v === 1 ? ' vaca' : ' vacas') + '</span></div>' +
+        '<p class="cap">' + R.v + (R.v === 1 ? ' vaca servida' : ' vacas servidas') + ' con ' + A.DX_MIN + ' días o más' + (R.q ? ' · ' + R.q + (R.q === 1 ? ' vaquillona' : ' vaquillonas') : '') + (dias != null ? ' · ' + dias + ' días desde el último tacto' : '') + '</p>' +
+        (r7.v > R.v ? '<p class="cap">Si esperás al ' + ayuDia(A.addDays(sel, 7)).toLowerCase() + ': <b>' + r7.v + ' vacas</b> (' + (r7.v - R.v) + ' más).</p>' : '') +
+        (R.L.length ? '<div class="aychips">' + R.L.map(function (a) { return '<button class="aych v" data-rp="' + esc(a.rp) + '"><b>' + esc(a.rp) + '</b><small>' + (a.cat === 'vaquillona' ? 'vaq · ' : '') + A.diffDays(sel, a.sFecha) + ' d</small></button>'; }).join('') + '</div>' : '') +
+        '</section><p class="cap">Cuenta las servidas que hay hoy cargadas, sin tacto todavía. No incluye vacías ni paridas sin servicio.</p>' +
+        '<button class="btn share" data-a="ayuenv">' + AYU_ENV + 'Proponer el día por WhatsApp</button>';
       return h + '</div>';
     }
     function ayuToggle(f) {
-      var M = ayuMes(), F = ayuFechas(M.m), i = F.indexOf(f);
+      if (state.ayu === 'tacto') { state.ayuSel = state.ayuSel === f ? null : f; render(); return; }
+      var C = AYU[state.ayu]; if (!C) return;
+      var M = ayuMes(), F = ayuFechas(C.k, M.m), i = F.indexOf(f);
       if (i >= 0) F.splice(i, 1); else F.push(f);
-      setP('ayusec:' + M.m, JSON.stringify(F.sort())); render();
+      setP(C.k + ':' + M.m, JSON.stringify(F.sort())); render();
     }
     function ayuEnviar() {
-      var D = ayuDatos();
-      var txt = '*Programa de secados' + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' + 'Secado a ' + A.SECADO + ' días del parto\n' +
-        D.T.map(function (t) {
-          var dd = AYU_DIAS[new Date(t.d + 'T12:00:00').getDay()];
-          return '\n*' + dd.charAt(0).toUpperCase() + dd.slice(1) + ' ' + A.fmt(t.d).slice(0, 5) + '* · ' + t.v.length + (t.v.length === 1 ? ' vaca' : ' vacas') + '\n' +
-            t.v.map(function (x) { var pt = postTacto(x.a); return x.a.rp + ' (' + x.seca + ' días de seca)' + (x.seca < A.SECADO ? ' ⚠' : '') + (pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') : ''); }).join('\n');
-        }).join('\n') + '\n\nDr. Mauro Torterolo';
+      var k = state.ayu, txt;
+      if (k === 'tacto') {
+        var f = state.ayuSel; if (!f) return; var R = ayuTactoN(f);
+        txt = '*Tacto' + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\nPropongo el ' + ayuDia(f).toLowerCase() + '\n' + R.v + (R.v === 1 ? ' vaca servida' : ' vacas servidas') + ' con ' + A.DX_MIN + ' días o más' + (R.q ? ' y ' + R.q + (R.q === 1 ? ' vaquillona' : ' vaquillonas') : '');
+      } else {
+        var C = AYU[k]; if (!C) return; var D = ayuDatos(C);
+        txt = '*' + C.t + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' + 'A ' + D.L + ' días del parto\n' +
+          D.T.map(function (t) {
+            return '\n*' + ayuDia(t.d) + '* · ' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '\n' +
+              t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return x.a.rp + (x.a.cat === 'vaquillona' ? ' (vaq.)' : '') + ' · ' + x.n + ' días ' + C.u + (x.n < D.L ? ' ⚠' : '') + (pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') : ''); }).join('\n');
+          }).join('\n');
+      }
+      txt += '\n\nDr. Mauro Torterolo';
       if (navigator.share) navigator.share({ text: txt }).catch(function () {});
       else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
     }
@@ -6443,6 +6501,7 @@
       if ((cpt = e.target.closest('[data-ctlmas]'))) { var mm = cpt.previousElementSibling; if (mm) mm.hidden = false; cpt.remove(); return; }
       if ((cpt = e.target.closest('[data-secck]'))) { secToggle(cpt); return; }
       if ((cpt = e.target.closest('[data-ayud]'))) { ayuToggle(cpt.dataset.ayud); return; }
+      if ((cpt = e.target.closest('[data-ayuk]'))) { state.ayu = cpt.dataset.ayuk; render(); window.scrollTo(0, 0); return; }
       if ((cpt = e.target.closest('[data-ayum]'))) { state.ayuOff = +cpt.dataset.ayum; render(); return; }
       var row = e.target.closest('[data-rp]');
       if (row) { openFicha(row.getAttribute('data-rp')); return; }
@@ -6583,8 +6642,8 @@
       else if (a === 'base') exportarBase();
       else if (a === 'vetclave') copiarClaveVet();
       else if (a === 'basein') { closeSheet(); $('#baseFile').click(); }
-      else if (a === 'ayu') { state.ayu = true; render(); window.scrollTo(0, 0); }
-      else if (a === 'ayucerrar') { state.ayu = false; render(); window.scrollTo(0, 0); }
+      else if (a === 'ayu') { state.ayu = 'menu'; render(); window.scrollTo(0, 0); }
+      else if (a === 'ayucerrar') { state.ayu = state.ayu && state.ayu !== 'menu' ? 'menu' : false; render(); window.scrollTo(0, 0); }
       else if (a === 'ayuenv') ayuEnviar();
       else if (a === 'voy') { state.voy = true; state.voyLista = null; render(); window.scrollTo(0, 0); }
       else if (a === 'voycerrar') { if (state.voyLista) state.voyLista = null; else state.voy = false; render(); window.scrollTo(0, 0); }
