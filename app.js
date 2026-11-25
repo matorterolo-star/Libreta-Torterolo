@@ -1568,9 +1568,10 @@
     }
     function tareasHTML() {
       var t = A.tareas(DB.animales.filter(function (a) { return a.cat !== 'ternera'; }), today(), state.ventana), vtxt = (VENT.filter(function (v) { return v[0] === state.ventana; })[0] || [0, ''])[1];
-      var fs = fechaSecado(), sec = listaSecado(fs);
+      var fs = fechaSecado(), sLts = secLts(), sec = listaSecar(fs, sLts);
       state.secarLista = sec;
       var secChips = '<div class="secsel"><span>Secar a</span>' + SECS.map(function (n) { return '<button class="fchip plain" data-sec="' + n + '" aria-pressed="' + (A.SECADO === n) + '">' + n + '</button>'; }).join('') + '<span>días del parto</span></div>';
+      var ltsChips = '<div class="secsel"><span>Menos de</span>' + SECLTS.map(function (n) { return '<button class="fchip plain" data-seclts="' + n + '" aria-pressed="' + (sLts === n) + '">' + n + '</button>'; }).join('') + '<span>litros</span></div>';
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
@@ -1584,9 +1585,12 @@
           return secTareas('tactar', 'Para tactar · vacas', nota, vc, rowT, 'No hay vacas pendientes de tacto.') +
             secTareas('tactarvq', 'Para tactar · vaquillonas', nota, vq, rowT, 'No hay vaquillonas pendientes de tacto.');
         })() +
-        secTareas('secar', 'Para secar', '<label class="secfecha">Fecha de secado <input type="date" id="fsec" value="' + fs + '" min="' + today() + '"></label>' + secChips + '<p class="secnote">Vacas preñadas que el ' + A.fmt(fs) + ' están a ' + A.SECADO + ' días o menos del parto. Ordenadas por caravana.</p>' + ('<button class="btn share" data-a="compsecar"' + (sec.length ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar lista por WhatsApp</button>' + (sec.length ? '' : '<p class="hint">Elegí la fecha del próximo secado para armar la lista.</p>')), sec, function (x) {
-          return rowHTML(x.a, { right: '<span class="when">' + x.dp + ' días al parto</span>', sub: 'Parto probable ' + A.fmt(x.P) });
-        }, 'Ninguna vaca para secar el ' + A.fmt(fs) + '.') +
+        secTareas('secar', 'Para secar', '<label class="secfecha">Fecha de secado <input type="date" id="fsec" value="' + fs + '" min="' + today() + '"></label>' + secChips + ltsChips +
+          '<p class="secnote">Vacas preñadas en ordeñe que el ' + A.fmt(fs) + ' están a ' + A.SECADO + ' días o menos del parto, o que dieron menos de ' + sLts + ' litros en el último control. Ordenadas por caravana.</p>' +
+          ('<button class="btn share" data-a="compsecar"' + (sec.length ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar lista por WhatsApp</button>'), sec, function (x) {
+          var lt = x.lt != null ? nf(x.lt, 1) + ' lts' : '';
+          return rowHTML(x.a, { right: '<span class="when">' + (x.porF ? x.dp + ' días al parto' : lt) + '</span>', sub: (x.P ? 'Parto probable ' + A.fmt(x.P) : 'Preñada') + (x.porF ? (lt ? ' · ' + lt : '') : x.dp != null ? ' · ' + x.dp + ' días al parto' : '') });
+        }, 'Ninguna vaca para secar el ' + A.fmt(fs) + ' ni con menos de ' + sLts + ' litros.') +
         secTareas('partos', 'Próximos partos', chips + '<p class="secnote">Partos probables en los próximos ' + vtxt + '.</p>', t.partos, function (x) {
           return rowHTML(x.a, { right: '<span class="when">' + A.rel(x.dias) + '</span>', sub: 'Parto probable ' + A.fmt(x.fecha) });
         }, 'Ningún parto probable en los próximos ' + vtxt + '.') +
@@ -1669,11 +1673,31 @@
       });
       return out.sort(function (x, y) { return numRp(x.a, y.a); });
     }
+    // Para secar por litros: vacas preñadas en ordeñe con menos de N litros en el último control
+    var SECLTS = [8, 10, 12, 14];
+    function secLts() { if (!state.secLts) { var n = null; try { n = +localStorage.getItem('libreta:seclts'); } catch (e) {} state.secLts = SECLTS.indexOf(n) >= 0 ? n : 14; } return state.secLts; }
+    function listaSecadoLts(L) {
+      var out = [], hoy = today();
+      DB.animales.forEach(function (a) {
+        if (a.estado !== 'prenada' || (a.cat && a.cat !== 'vaca')) return;
+        var lt = (a.pr || [])[0]; if (typeof lt !== 'number' || lt <= 0 || lt >= L) return;
+        var d = A.derive(a, hoy), P = d.partoProb || null;
+        out.push({ a: a, lt: lt, P: P, dp: P ? A.diffDays(P, hoy) : null });
+      });
+      return out.sort(function (x, y) { return numRp(x.a, y.a); });
+    }
+    // lista única para secar: por preñez (a SECADO días o menos del parto en la fecha elegida) o por leche (menos de N litros)
+    function listaSecar(f, lim) {
+      var M = {};
+      listaSecado(f).forEach(function (x) { M[x.a.rp] = { a: x.a, P: x.P, dp: x.dp, porF: true, lt: typeof (x.a.pr || [])[0] === 'number' ? x.a.pr[0] : null }; });
+      listaSecadoLts(lim).forEach(function (x) { if (M[x.a.rp]) M[x.a.rp].porL = true; else M[x.a.rp] = { a: x.a, P: x.P, dp: x.P ? A.diffDays(x.P, f) : null, lt: x.lt, porL: true }; });
+      return Object.keys(M).map(function (k) { return M[k]; }).sort(function (x, y) { return numRp(x.a, y.a); });
+    }
     function compartirSecar() {
       var L = state.secarLista || [];
       var txt = '*Vacas para secar' + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' +
-        'Secado del ' + A.fmt(state.fsec) + ' · hasta ' + A.SECADO + ' días antes del parto\n\n' +
-        L.map(function (x) { return '*' + x.a.rp + '* · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)'; }).join('\n') +
+        'Secado del ' + A.fmt(state.fsec) + ' · hasta ' + A.SECADO + ' días antes del parto o menos de ' + secLts() + ' litros\n\n' +
+        L.map(function (x) { return '*' + x.a.rp + '*' + (x.P ? ' · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)' : '') + (x.porL ? ' · ' + nf(x.lt, 1) + ' lts' : ''); }).join('\n') +
         '\n\nTotal: ' + L.length + (L.length === 1 ? ' vaca' : ' vacas') + '\nDr. Mauro Torterolo';
       if (navigator.share) navigator.share({ text: txt }).catch(function () {});
       else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
@@ -1830,10 +1854,17 @@
         var t = gToroFec(a, Pp); if (t) { toros[t] = toros[t] || { n: 0, q: 0 }; toros[t].n++; if (c === 'vaquillona') toros[t].q++; }
         partos.push({ f: Pp, q: c === 'vaquillona', t: t });
       });
+      // posibles: vacas y vaquillonas servidas sin tacto, como si todas quedaran preñadas del último servicio
+      var serv = [];
+      DB.animales.forEach(function (a) {
+        var c = a.cat || 'vaca'; if (c === 'ternera' || a.estado !== 'servida' || !a.sFecha) return;
+        var Pp = A.addDays(a.sFecha, A.GEST); if (Pp < hoy) return;
+        serv.push({ f: Pp, q: c === 'vaquillona', t: gNomToro(a.toro) });
+      });
       var dedu = Object.keys(toros).some(esc0);
       var perd = (gNum(P.perd) || 0) / 100, mort = (gNum(P.mort) || 0) / 100, sxv = (gNum(P.sxv) || 0) / 100, carv = (gNum(P.carv) || 0) / 100;
       var nQ = 0, nQsx = 0, nQsin = 0, nQman = 0, nV = 0, nVsin = 0, esp = 0, espQ = 0;
-      partos.forEach(function (x) {
+      var pesar = function (x, cuenta) {
         var tp = dedu ? tipo(x.t) : null, ph;
         if (x.q) {
           nQ++;
@@ -1845,13 +1876,17 @@
           else if (tp) ph = GP_H[tp];
           else { ph = sxv * GP_H.s + carv * GP_H.c + Math.max(0, 1 - sxv - carv) * GP_H.n; if (dedu) nVsin++; }
         }
-        x.w = ph * (1 - perd) * (1 - mort); esp += x.w; if (x.q) espQ += x.w;
-      });
+        x.w = ph * (1 - perd) * (1 - mort);
+      };
+      partos.forEach(function (x) { pesar(x); esp += x.w; if (x.q) espQ += x.w; });
+      var nQ0 = nQ, nQsx0 = nQsx, nQsin0 = nQsin, nQman0 = nQman, nV0 = nV, nVsin0 = nVsin, espS = 0;
+      serv.forEach(function (x) { pesar(x); espS += x.w; });
+      nQ = nQ0; nQsx = nQsx0; nQsin = nQsin0; nQman = nQman0; nV = nV0; nVsin = nVsin0; // el resumen del sexado sigue siendo de los partos confirmados
       // terneras que ya están: hembras nacidas en los últimos 75 días (terneras registradas; si no hay, crías hembra anotadas en los partos)
       var naci = [], d75 = A.addDays(hoy, -75);
       DB.animales.forEach(function (a) { if (a.cat !== 'ternera') return; var h = DB.hist && DB.hist[a.rp]; if (h && h.fn && h.fn > d75 && h.fn <= hoy) naci.push({ f: h.fn, w: 1 }); });
       if (!naci.length && DB.hist) Object.keys(DB.hist).forEach(function (k) { var h = DB.hist[k]; if (!h || !h.pa) return; h.pa.forEach(function (p) { if (p[0] > d75 && p[0] <= hoy) { var nh = String(p[2] || '').split('/').filter(function (c) { return c === 'H'; }).length; if (nh) naci.push({ f: p[0], w: nh * (1 - mort) }); } }); });
-      return { hoy: hoy, lim: lim, P: P, TM: TM, partos: partos, naci: naci, toros: toros, dedu: dedu, nQ: nQ, nQsx: nQsx, nQsin: nQsin, nQman: nQman, nV: nV, nVsin: nVsin, esp: esp, espQ: espQ };
+      return { hoy: hoy, lim: lim, P: P, TM: TM, partos: partos, naci: naci, toros: toros, dedu: dedu, nQ: nQ, nQsx: nQsx, nQsin: nQsin, nQman: nQman, nV: nV, nVsin: nVsin, esp: esp, espQ: espQ, serv: serv, espS: espS };
     }
     function guacheraSemanas(G, N) {
       var d = new Date(G.hoy + 'T12:00:00'), dw = (d.getDay() + 6) % 7, ini = A.addDays(G.hoy, -dw), S = [], todos = G.naci.concat(G.partos);
@@ -1883,7 +1918,9 @@
       var chips = '<div class="secsel"><span>Crianza</span>' + [45, 60, 75].map(function (d) { return '<button class="fchip plain" data-gcr="' + d + '" aria-pressed="' + (N === d) + '">' + d + '</button>'; }).join('') + '<span>días</span></div>';
       var kp = '<div class="kpis kpis2"><div' + (sobre.length ? ' class="mal"' : '') + '><b>' + pico + '</b><span>Pico · semana del ' + fd(S[iP].f) + '</span></div>' +
         (cap ? '<div' + (sobre.length ? ' class="mal"' : ' class="ok"') + '><b>' + sobre.length + '</b><span>' + (sobre.length ? 'Semanas sobre ' + cap + ' · desde el ' + fd(S[sobre[0]].f) : 'Semanas sobre ' + cap + ' · no se pasa') + '</span></div>'
-          : '<div><b>' + vals[0] + '</b><span>Hoy en la guachera</span></div>') + '</div>';
+          : '<div><b>' + vals[0] + '</b><span>Hoy en la guachera</span></div>') + '</div>' +
+        '<div class="kpis kpis2"><div><b>' + nf(Math.round(G.esp)) + '</b><span>Terneras esperadas · ' + G.partos.length + ' partos confirmados</span></div>' +
+        '<div><b>' + (G.serv.length ? '~' : '') + nf(Math.round(G.esp + G.espS)) + '</b><span>' + (G.serv.length ? 'Posibles · si preñan las ' + G.serv.length + ' servidas sin tacto' : 'Posibles · no hay servidas sin tacto') + '</span></div></div>';
       // resumen del sexado de las vaquillonas
       var pc = function (v) { var x = gNum(v); return x == null ? '0%' : nf(x) + '%'; };
       var sx = !G.nQ ? '' : G.dedu ? 'de los servicios: ' + nf(Math.round(G.nQsx / Math.max(1, G.nQ - G.nQsin) * 100)) + '%' + (G.nQsin ? ' (' + G.nQsin + ' sin toro, a mano)' : '')
@@ -1892,9 +1929,9 @@
       var aj = state.gAj ? guacheraAjustes(G) : '';
       return '<section class="card guach"><h2>Proyección de guachera</h2>' + chips + kp +
         '<svg class="mchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Terneras en la guachera por semana">' + s + '</svg>' +
-        '<p class="cap">Hasta el ' + fd(S[S.length - 1].f) + ': lo que viene después todavía depende de vacas sin tacto. ' + nf(G.esp) + ' terneras esperadas de ' + G.partos.length + ' partos confirmados.</p>' + fila +
+        '<p class="cap">Hasta el ' + fd(S[S.length - 1].f) + ': lo que viene después todavía depende de vacas sin tacto.</p>' + fila +
         '<button class="despbtn" data-a="gaj" aria-expanded="' + !!state.gAj + '"><span>Ajustes del tambo</span><span class="chev">' + (state.gAj ? 'ocultar' : 'ver') + '</span></button>' + aj +
-        '<details class="nota"><summary>Cómo se calcula</summary><p class="cap">Cada parto confirmado por tacto aporta una ternera esperada: probabilidad de hembra (semen sexado 0,90; convencional 0,48; carne 0) × (1 − pérdida de preñez) × (1 − mortalidad al parto). La ternera ocupa un lugar desde que nace hasta el día ' + N + '. Cada barra es la suma de las terneras esperadas nacidas en los ' + N + ' días anteriores a esa semana, más las hembras que ya nacieron. La baja de preñez del sexado no cuenta: ya son preñeces confirmadas. Estaciones para el sexado de vaquillonas: otoño feb–may, invierno jun–ago, primavera sep–ene, según la fecha de parto.</p></details></section>';
+        '<details class="nota"><summary>Cómo se calcula</summary><p class="cap">Cada parto confirmado por tacto aporta una ternera esperada: probabilidad de hembra (semen sexado 0,90; convencional 0,48; carne 0) × (1 − pérdida de preñez) × (1 − mortalidad al parto). La ternera ocupa un lugar desde que nace hasta el día ' + N + '. Cada barra es la suma de las terneras esperadas nacidas en los ' + N + ' días anteriores a esa semana, más las hembras que ya nacieron. La baja de preñez del sexado no cuenta: ya son preñeces confirmadas. Posibles: las esperadas más las servidas sin tacto, como si todas quedaran preñadas del último servicio (parto a los ' + A.GEST + ' días), con la misma cuenta de hembras; es el máximo, no una predicción. Estaciones para el sexado de vaquillonas: otoño feb–may, invierno jun–ago, primavera sep–ene, según la fecha de parto.</p></details></section>';
     }
     function guacheraAjustes(G) {
       var P = G.P, inp = function (k, lbl, suf) { return '<label class="xnum">' + lbl + ' <input type="number" inputmode="decimal" min="0" max="' + (k === 'cap' ? 9999 : 100) + '" data-gp="' + k + '" value="' + esc(P[k] == null ? '' : P[k]) + '" placeholder="–"> ' + (suf || '') + '</label>'; };
@@ -5982,7 +6019,7 @@
         var pp = A.derive(a, ref).partoProb || a.partoProb;
         if (simple) {
           if (secar && secar[a.rp]) return ['SECAR', secar[a.rp].dp];
-          var lt = (a.pr || [])[0]; if (typeof lt === 'number' && lt < PLT_LTS) return ['SECAR LTS', Math.round(lt * 10) / 10];
+          var lt = (a.pr || [])[0]; if (typeof lt === 'number' && lt < secLts()) return ['SECAR LTS', Math.round(lt * 10) / 10];
           return null;
         }
         return [pp ? pp.slice(8, 10) + '-' + pp.slice(5, 7) + '-' + pp.slice(2, 4) : 'Preñada', ''];
@@ -6060,7 +6097,7 @@
       state.pltRef = refV || null;
       $('#sheetXTitle').textContent = 'Planilla de tacto' + (refV ? ' para el ' + A.fmt(refV) : '');
       $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 6px">Vacas en ordeñe por caravana, en tres columnas para imprimir y anotar en el corral.</p>' +
-        '<p class="cap"><b>Completa:</b> todas las vacas en ordeñe. <b>Para bastón:</b> ID de trazabilidad (858 0000 + los 8 números del ID electrónico), caravana y lo que dice la planilla completa, para cargar en el lector. <b>Simple:</b> sin preñadas, descartes ni paridas de menos de ' + PLT_PARIDA + ' días; de las preñadas solo van las que hay que secar (por la fecha de Para secar, el ' + A.fmt(fechaSecado()) + ', o con menos de ' + PLT_LTS + ' litros) y las que tienen celo o servicio después del tacto, que salen marcadas en rojo.</p>';
+        '<p class="cap"><b>Completa:</b> todas las vacas en ordeñe. <b>Para bastón:</b> ID de trazabilidad (858 0000 + los 8 números del ID electrónico), caravana y lo que dice la planilla completa, para cargar en el lector. <b>Simple:</b> sin preñadas, descartes ni paridas de menos de ' + PLT_PARIDA + ' días; de las preñadas solo van las que hay que secar (por la fecha de Para secar, el ' + A.fmt(fechaSecado()) + ', o con menos de ' + secLts() + ' litros) y las que tienen celo o servicio después del tacto, que salen marcadas en rojo.</p>';
       $('#xbtns').innerHTML = '<button class="btn primary big" data-a="plt" data-m="simple">Planilla simple</button><button class="btn big" data-a="plt" data-m="completa">Planilla completa</button><button class="btn big" data-a="plt" data-m="baston">Planilla para bastón</button><button class="btn" data-a="xcancel">Cancelar</button>';
       $('#sheetX').hidden = false;
     }
@@ -6207,7 +6244,7 @@
       $('#sheetXTitle').textContent = (simple ? 'Planilla simple · ' : 'Planilla completa · ') + L.length + ' vacas';
       $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 6px">Vacas en ordeñe por caravana, en tres columnas para imprimir (' + pags + (pags === 1 ? ' hoja' : ' hojas') + ').' + (simple ? ' Sin preñadas, descartes ni paridas de menos de ' + PLT_PARIDA + ' días.' : '') + '</p>' +
         (nAl ? '<p class="ralerta">⚠ ' + nAl + (nAl === 1 ? ' vaca preñada tiene' : ' vacas preñadas tienen') + ' celo o servicio después del tacto (en rojo en la planilla).</p>' : '') +
-        '<details class="nota"><summary>Qué dice cada vaca</summary><p class="cap">' + (simple ? '' : 'Preñada: fecha probable de parto · ') + 'REVISAR: servida hace ' + A.DX_MIN + ' días o más · PARCHE: servida hace menos de ' + A.DX_MIN + ' días (el número son los días de servida) · PARIDA: sin servicio ni tacto, con los días de parida · con tacto sin preñez: el resultado y los días de parida · ' + (simple ? 'SECAR: preñada para secar el ' + A.fmt(fechaSecado()) + ' (días al parto) · SECAR LTS: preñada con menos de ' + PLT_LTS + ' litros en el último control · ' : 'DESCARTE · ') + 'PREÑ+CELO / PREÑ+SERV: preñada con celo o servicio después del tacto (días desde ese celo o servicio). Al lado de cada vaca queda una columna en blanco para anotar.</p></details>' +
+        '<details class="nota"><summary>Qué dice cada vaca</summary><p class="cap">' + (simple ? '' : 'Preñada: fecha probable de parto · ') + 'REVISAR: servida hace ' + A.DX_MIN + ' días o más · PARCHE: servida hace menos de ' + A.DX_MIN + ' días (el número son los días de servida) · PARIDA: sin servicio ni tacto, con los días de parida · con tacto sin preñez: el resultado y los días de parida · ' + (simple ? 'SECAR: preñada para secar el ' + A.fmt(fechaSecado()) + ' (días al parto) · SECAR LTS: preñada con menos de ' + secLts() + ' litros en el último control · ' : 'DESCARTE · ') + 'PREÑ+CELO / PREÑ+SERV: preñada con celo o servicio después del tacto (días desde ese celo o servicio). Al lado de cada vaca queda una columna en blanco para anotar.</p></details>' +
         '<p class="cap">' + ['Revisar', 'Parche', 'Paridas', 'Con tacto sin preñez', 'Para secar', 'Preñadas con celo o servicio', 'Preñadas', 'Descarte'].filter(function (k) { return cu[k]; }).map(function (k) { return '<b>' + cu[k] + '</b> ' + k.toLowerCase(); }).join(' · ') + '</p>' +
         '<div class="xprev">' + L.map(function (a) { var f = F[a.rp]; return '<div><b>' + esc(a.rp) + '</b><span' + (f[2] ? ' style="color:var(--vacia);font-weight:700"' : '') + '>' + esc(f[0] + (f[1] !== '' ? ' ' + String(f[1]).replace('.', ',') : '')) + '</span></div>'; }).join('') + '</div><p class="cap">Archivo: ' + esc(nombre) + '</p>';
       var puede = !!(navigator.share && file);
@@ -6337,6 +6374,7 @@
       if ((el = e.target.closest('[data-insel]'))) { state.insSel = el.dataset.insel; render(); return; }
       if ((el = e.target.closest('[data-gcr]'))) { state.gCr = +el.dataset.gcr; setP('gcr', el.dataset.gcr); render(); return; }
       if ((el = e.target.closest('[data-gtoro]'))) { var gT = gToros(), gt = el.dataset.gt, gn = el.dataset.gtoro; if (gt === (gAutoTipo(gn) || 'n')) delete gT[gn]; else gT[gn] = gt; setP('gtoros', JSON.stringify(gT)); render(); return; }
+      if ((el = e.target.closest('[data-seclts]'))) { state.secLts = +el.dataset.seclts; try { localStorage.setItem('libreta:seclts', el.dataset.seclts); } catch (x) {} render(); return; }
       if ((el = e.target.closest('[data-sec]'))) { A.setSecado(+el.dataset.sec); try { localStorage.setItem('libreta:secado', el.dataset.sec); } catch (x) {} render(); return; }
       if ((el = e.target.closest('[data-plg]'))) { var sec = el.parentNode, ab = !sec.classList.contains('open'); sec.classList.toggle('open', ab); el.setAttribute('aria-expanded', ab); if (ab) FICHA_AB[el.dataset.plg] = 1; else delete FICHA_AB[el.dataset.plg]; return; }
       if ((el = e.target.closest('[data-desp]'))) { state.desp = state.desp || {}; state.desp[el.dataset.desp] = !state.desp[el.dataset.desp]; render(); return; }
