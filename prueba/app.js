@@ -6404,22 +6404,23 @@
          las 45 filas llenen la hoja, con un poco de margen. */
       var anchoIn = (ws[0] + ws[1] + ws[2] + ws[3]) * 3 * 7.4 / 96 * 1.03;
       var ESC = Math.max(40, Math.min(100, Math.floor(7.5 / anchoIn * 100)));
-      var HT = Math.max(14, Math.min(22, Math.floor(10.3 * 72 / (FP * ESC / 100) * 2) / 2));
+      // alto útil de A4 con márgenes mínimos (arriba 0,5" y abajo 0,3"): las filas llenan el 98,5 %
+      var HT = Math.max(14, Math.min(26, Math.floor((11.69 - 0.5 - 0.3) * 72 * 0.985 / (FP * ESC / 100) * 2) / 2));
       var cortes = ''; for (pg = 1; pg < pags; pg++) cortes += '<brk id="' + pg * FP + '" max="16383" man="1"/>';
       var tit = (simple ? 'Tacto simple · ' : 'Tacto · ') + (PERFIL.nombre || 'Tambo') + ' · ' + A.fmt(ref);
       var hoja = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>' + cols + '</cols><sheetData>' + filas.join('').split('@HT@').join(String(HT)) + '</sheetData>' +
-        '<pageMargins left="0.4" right="0.3" top="0.6" bottom="0.4" header="0.25" footer="0.2"/><pageSetup paperSize="9" orientation="portrait" scale="' + ESC + '"/>' +
+        '<pageMargins left="0.4" right="0.3" top="0.5" bottom="0.3" header="0.2" footer="0.1"/><pageSetup paperSize="9" orientation="portrait" scale="' + ESC + '"/>' +
         '<headerFooter><oddHeader>' + X('&C&"-,Bold"' + tit) + '</oddHeader><oddFooter>' + X('&CPágina &P de &N') + '</oddFooter></headerFooter>' +
         (cortes ? '<rowBreaks count="' + (pags - 1) + '" manualBreakCount="' + (pags - 1) + '">' + cortes + '</rowBreaks>' : '') + '</worksheet>';
       var estilos = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-        '<fonts count="3"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="13"/><name val="Calibri"/></font><font><b/><sz val="10"/><color rgb="FFC00000"/><name val="Calibri"/></font></fonts>' +
+        '<fonts count="4"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFC00000"/><name val="Calibri"/></font><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
         '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
         '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FFB0B0B0"/></bottom><diagonal/></border></borders>' +
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
         '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
         '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment vertical="center"/></xf>' +
-        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"><alignment vertical="center"/></xf>' +
-        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"><alignment horizontal="center" vertical="center"/></xf>' +
+        '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment vertical="center"/></xf>' +
+        '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf>' +
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>' +
         '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment vertical="center"/></xf>' +
         '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf></cellXfs>' +
