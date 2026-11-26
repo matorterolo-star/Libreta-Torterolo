@@ -158,6 +158,16 @@ main{padding-top:16px;padding-bottom:calc(92px + env(safe-area-inset-bottom,0px)
 .chip.venta2{--c:#fff;background:var(--vacia);border-color:var(--vacia);color:#fff}
 .fchip.venta[aria-pressed="false"]{border-color:var(--vacia);color:var(--vacia)}
 .when{font-size:13.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.secrt{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+.secpill{font-size:12px;font-weight:700;line-height:1;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.secpill.pp{color:var(--prenada);background:color-mix(in srgb,var(--prenada) 14%,transparent)}
+.secpill.pl{color:var(--ciclando);background:color-mix(in srgb,var(--ciclando) 14%,transparent)}
+.selw{position:relative}
+.selw .row{padding-left:56px;grid-template-columns:54px minmax(0,1fr) auto}
+.secck{position:absolute;left:12px;top:50%;width:30px;height:30px;margin-top:-19px;border-radius:9px;border:2px solid var(--link);background:var(--link);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.selw.off .secck{background:transparent;border-color:var(--line);color:transparent}
+.selw.off .row{background:transparent}
+.secselnote{font-size:13px;color:var(--muted);margin:-2px 0 10px}
 .when.late{color:var(--vacia)}
 .when.ok{color:var(--prenada)}
 
@@ -403,6 +413,11 @@ body.ancho main.wrap{max-width:1280px}
 @media (prefers-color-scheme:dark){.secfecha input{border-color:var(--gold);color-scheme:dark}}
 .secsel{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 0 8px;font-size:14px;color:var(--muted);font-weight:600}
 .secsel .fchip{min-height:36px;padding:5px 12px}
+.secrng{margin:8px 0 10px}
+.secrv{display:flex;align-items:baseline;gap:7px;font-size:14px;color:var(--muted);font-weight:600}
+.secrv b{font-size:26px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.secrng input[type=range]{width:100%;margin:8px 0 2px;accent-color:var(--link);height:28px}
+.secrt2{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:0 4px}
 .btn.share{display:inline-flex;align-items:center;gap:8px;margin:4px 0 12px;border-color:#1F9D55;color:#1F7A45;font-weight:700}
 @media (prefers-color-scheme:dark){.btn.share{color:#5FCB92;border-color:#5FCB92}}
 .mval{font-size:11px;fill:var(--ink);font-weight:700}.mlbl{font-size:10.5px;fill:var(--muted)}.myear{font-size:9px;fill:var(--muted)}
@@ -663,6 +678,36 @@ details.lac summary .l{flex:1}
 
 /* Voy mañana (modo veterinario) */
 .voyent{display:flex;align-items:center;gap:12px;width:100%;margin:6px 0 4px;padding:16px;border:0;border-radius:16px;background:var(--navy);color:#fff;font:inherit;text-align:left;cursor:pointer}
+.ayuent{margin-top:8px}
+.ayuop{display:flex;align-items:center;gap:12px;width:100%;margin:0 0 10px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.ayuop span{flex:1}.ayuop b{display:block;font-size:17px}.ayuop small{display:block;font-size:13.5px;color:var(--muted);margin-top:3px}.ayuop svg{color:var(--link)}
+.ayums{display:flex;gap:8px;margin:4px 0 6px}.ayums .fchip{flex:1;min-height:40px}
+.aycard{padding:14px}.aymt{font-size:17px;margin:0 0 8px}
+.aycal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center}
+.aycal .dw{font-size:12px;color:var(--muted);font-weight:700;padding-bottom:2px}
+.aycal>span,.ayd{min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;font-size:15px;line-height:1.05}
+.aycal .pas{color:var(--muted);opacity:.45}
+.aycal .pas.on{background:var(--link);color:#fff;opacity:.45;font-weight:800}.aycal .pas small{font-size:11px}
+.aytan.hecha{opacity:.7}.ayhecha{font-size:12.5px;font-weight:700;color:var(--muted);margin-left:4px}.ayinfo{margin:-4px 0 12px}.ayinfo b{color:var(--descarte)}
+.ayd{border:1px solid var(--line);background:none;color:var(--ink);font:inherit;font-weight:600;cursor:pointer;padding:0}
+.ayd.hoy{border-color:var(--ink)}
+.ayd.sug{background:#FAEEDA;border-color:#FAEEDA;color:#633806;font-weight:800}.ayd.sug small{color:#854F0B}
+.aysugl{margin:2px 0 8px}.aysugl i{display:inline-block;width:12px;height:12px;border-radius:4px;background:#FAEEDA;border:1px solid #EF9F27;vertical-align:-1px;margin-right:6px}
+.btn.ayusug{width:100%;margin:0 0 12px;border:1.5px solid #854F0B;color:#854F0B;background:transparent}
+.ayd.on{background:var(--link);border-color:var(--link);color:#fff;font-weight:800}
+.ayd small{font-size:11px;font-weight:700;opacity:.9}
+.aytan{padding:14px;position:relative}.aytan .ayth{padding-right:48px}.ayth{display:flex;justify-content:space-between;align-items:center}.ayth h2{font-size:17px;margin:0}
+.ayr{color:var(--descarte)}
+.aychips{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+.aych{display:inline-flex;flex-direction:column;align-items:center;min-width:58px;padding:6px 8px;border-radius:10px;border:2px solid transparent;background:color-mix(in srgb,var(--prenada) 13%,transparent);color:var(--ink);font:inherit;cursor:pointer}
+.aych b{font-size:15px}.aych small{font-size:11.5px;font-weight:700;color:var(--prenada)}
+.aych.a{background:color-mix(in srgb,var(--apta) 15%,transparent)}.aych.a small{color:var(--apta)}
+.aych.r{background:color-mix(in srgb,var(--descarte) 12%,transparent)}.aych.r small{color:var(--descarte)}
+.aych.lb{background:color-mix(in srgb,var(--ciclando) 14%,transparent)}.aych.lb small{color:var(--ciclando)}
+.ayley i.lb{background:color-mix(in srgb,var(--ciclando) 35%,transparent)}
+.aych.alr{border-color:var(--descarte)}
+.ayley{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:4px 0 10px}.ayley i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-left:4px}
+.ayley i.v{background:color-mix(in srgb,var(--prenada) 35%,transparent)}.ayley i.a{background:color-mix(in srgb,var(--apta) 40%,transparent)}.ayley i.r{background:color-mix(in srgb,var(--descarte) 35%,transparent)}.ayley i.x{border:2px solid var(--descarte)}
 .voyent span{flex:1}.voyent b{display:block;font-size:18px}.voyent small{display:block;font-size:13px;color:#c9d3e6;margin-top:2px}.voyent svg{color:var(--gold)}
 .voysub{color:var(--muted);font-size:14px;margin:-6px 2px 14px}
 .vg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -846,6 +891,6 @@ details.lac summary .l{flex:1}
 <script src="fosapp.js?v=67"></script>
 <script src="unrar.js"></script>
 <script src="unrar-wasm.js"></script>
-<script src="app.js?v=94"></script>
+<script src="app.js?v=95"></script>
 </body>
 </html>

@@ -1153,7 +1153,7 @@
 
     /* ----- navegación ----- */
     function setTab(t) {
-      state.tab = t; state.rp = null; state.informe = false; state.pobl = false; state.voy = false; state.voyLista = null;
+      state.tab = t; state.rp = null; state.informe = false; state.pobl = false; state.voy = false; state.voyLista = null; state.ayu = false;
       try { if (location.hash) location.hash = ''; } catch (e) {}
       render(); window.scrollTo(0, 0);
     }
@@ -1363,7 +1363,7 @@
     }
 
     /* ----- pestaña Tareas ----- */
-    var SECS = [45, 50, 60, 65];
+    var SECS = [45, 50, 55, 60, 65, 70, 75, 80, 85, 90]; // perilla de 45 a 90 de a 5; por defecto 60
     var VENT = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [183, '6 meses'], [365, '12 meses']];
     // seca o vaquillona preñada en los últimos 30 días antes del parto probable (como en Rodeo por mes)
     function enPreparto(a) {
@@ -1572,14 +1572,15 @@
       var t = A.tareas(DB.animales.filter(function (a) { return a.cat !== 'ternera'; }), today(), state.ventana), vtxt = (VENT.filter(function (v) { return v[0] === state.ventana; })[0] || [0, ''])[1];
       var fs = fechaSecado(), sLts = secLts(), sec = listaSecar(fs, sLts);
       state.secarLista = sec;
-      var secChips = '<div class="secsel"><span>Secar a</span>' + SECS.map(function (n) { return '<button class="fchip plain" data-sec="' + n + '" aria-pressed="' + (A.SECADO === n) + '">' + n + '</button>'; }).join('') + '<span>días del parto</span></div>';
-      var ltsChips = '<div class="secsel"><span>Menos de</span>' + SECLTS.map(function (n) { return '<button class="fchip plain" data-seclts="' + n + '" aria-pressed="' + (sLts === n) + '">' + n + '</button>'; }).join('') + '<span>litros</span></div>';
+      var nSel = sec.filter(secSel).length;
+      var secChips = '<div class="secrng"><div class="secrv"><span>Secar a</span><b id="secv">' + A.SECADO + '</b><span>días del parto</span></div><input type="range" id="secr" min="45" max="90" step="5" value="' + A.SECADO + '" aria-label="Días de secado antes del parto"><div class="secrt2"><span>45</span><span>60</span><span>75</span><span>90</span></div></div>';
+      var ltsChips = '<div class="secrng"><div class="secrv"><span>O con menos de</span><b id="seclv">' + sLts + '</b><span>litros</span></div><input type="range" id="seclr" min="5" max="20" step="1" value="' + sLts + '" aria-label="Litros del último control"><div class="secrt2"><span>5</span><span>10</span><span>15</span><span>20</span></div></div>';
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
       var GT = [], grp = function (t, html) { if (html) GT.push([t, html]); return ''; };
       var lrow = function (a, t, d) { return '<button class="lrow" data-a="' + a + '"><span class="lico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="pttl"><h2>' + t + '</h2><small class="pdesc">' + d + '</small></span><svg class="chev rt" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'; };
-      return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana ' + VTAG + '</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + grp('Para hacer',
+      return '<h1 class="ptitle">Tareas</h1>' + (esVet() ? '<button class="voyent" data-a="voy"><span><b>Voy mañana ' + VTAG + '</b><small>Lo que hay que ver en la visita de mañana</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + '<button class="voyent ayuent" data-a="ayu"><span><b>Yo te ayudo</b><small>Programar secados y entradas a preparto</small></span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' + grp('Para hacer',
         (function () {
           var rowT = function (x) { return rowHTML(x.a, { right: '<span class="when late">hace ' + x.dias + ' días</span>', sub: 'Servicio ' + A.fmt(x.fecha) + (x.a.toro && !/^celo/i.test(x.a.toro) ? ' · ' + esc(x.a.toro) : '') }); };
           var nota = 'Servidas hace ' + A.DX_MIN + ' días o más, sin tacto posterior.';
@@ -1589,10 +1590,12 @@
         })() +
         secTareas('secar', 'Para secar', '<label class="secfecha">Fecha de secado <input type="date" id="fsec" value="' + fs + '" min="' + today() + '"></label>' + secChips + ltsChips +
           '<p class="secnote">Vacas preñadas en ordeñe que el ' + A.fmt(fs) + ' están a ' + A.SECADO + ' días o menos del parto, o que dieron menos de ' + sLts + ' litros en el último control. Ordenadas por caravana. Con la alerta, las que tuvieron celo o servicio después del tacto preñada: confirmar la preñez antes de secar.</p>' +
-          ('<button class="btn share" data-a="compsecar"' + (sec.length ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar lista por WhatsApp</button>'), sec, function (x) {
+          ('<button class="btn share" id="secenv" data-a="compsecar"' + (nSel ? '' : ' disabled') + '><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>' + envTxt(nSel) + '</span></button><p class="secselnote">Tocá la casilla para sumarla o sacarla del mensaje.</p>'), sec, function (x) {
           var lt = x.lt != null ? nf(x.lt, 1) + ' lts' : '', pt = postTacto(x.a);
           var al = pt ? '<span class="alr"><b>' + (pt[1] === 'S' ? 'Preñada + servicio' : 'Preñada + celo') + (pt[0] ? ' ' + A.fmt(pt[0]).slice(0, 5) : '') + '</b>' + ALR_SVG + '</span><br>' : '';
-          return rowHTML(x.a, { right: '<span class="when">' + (x.porF ? x.dp + ' días al parto' : lt) + '</span>', sub: al + (x.P ? 'Parto probable ' + A.fmt(x.P) : 'Preñada') + (x.porF ? (lt ? ' · ' + lt : '') : x.dp != null ? ' · ' + x.dp + ' días al parto' : '') });
+          var on = secSel(x), rp = esc(x.a.rp);
+          return '<div class="selw' + (on ? '' : ' off') + '">' + rowHTML(x.a, { right: '<span class="secrt"><span class="secpill ' + (x.porF ? 'pp">Por preñez' : 'pl">Por leche') + '</span><span class="when">' + (x.porF ? x.dp + ' días al parto' : lt) + '</span></span>', sub: al + (x.P ? 'Parto ' + A.fmt(x.P).slice(0, 5) : 'Preñada') + (x.porF ? (lt ? '<br>' + lt : '') : x.dp != null ? '<br>' + x.dp + ' días al parto' : '') }) +
+            '<span class="secck" data-secck="' + rp + '" role="checkbox" aria-checked="' + on + '" aria-label="Incluir ' + rp + ' en el mensaje"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>';
         }, 'Ninguna vaca para secar el ' + A.fmt(fs) + ' ni con menos de ' + sLts + ' litros.') +
         secTareas('partos', 'Próximos partos', chips + '<p class="secnote">Partos probables en los próximos ' + vtxt + '.</p>', t.partos, function (x) {
           return rowHTML(x.a, { right: '<span class="when">' + A.rel(x.dias) + '</span>', sub: 'Parto probable ' + A.fmt(x.fecha) });
@@ -1677,7 +1680,7 @@
       return out.sort(function (x, y) { return numRp(x.a, y.a); });
     }
     // Para secar por litros: vacas preñadas en ordeñe con menos de N litros en el último control
-    var SECLTS = [8, 10, 12, 14];
+    var SECLTS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]; // perilla de 5 a 20 litros; por defecto 14
     function secLts() { if (!state.secLts) { var n = null; try { n = +localStorage.getItem('libreta:seclts'); } catch (e) {} state.secLts = SECLTS.indexOf(n) >= 0 ? n : 14; } return state.secLts; }
     function listaSecadoLts(L) {
       var out = [], hoy = today();
@@ -1696,8 +1699,18 @@
       listaSecadoLts(lim).forEach(function (x) { if (M[x.a.rp]) M[x.a.rp].porL = true; else M[x.a.rp] = { a: x.a, P: x.P, dp: x.P ? A.diffDays(x.P, f) : null, lt: x.lt, porL: true }; });
       return Object.keys(M).map(function (k) { return M[k]; }).sort(function (x, y) { return numRp(x.a, y.a); });
     }
+    // selección para el mensaje: por defecto van marcadas las de por preñez y sin marcar las de por leche; el veterinario elige
+    function secSel(x) { var m = state.secSel || {}; return m[x.a.rp] != null ? m[x.a.rp] : !!x.porF; }
+    function envTxt(n) { return n ? 'Enviar ' + n + (n === 1 ? ' vaca' : ' vacas') + ' por WhatsApp' : 'Marcá las vacas para enviar'; }
+    function secToggle(el) {
+      var rp = el.dataset.secck, x = (state.secarLista || []).filter(function (y) { return String(y.a.rp) === rp; })[0]; if (!x) return;
+      state.secSel = state.secSel || {}; var on = !secSel(x); state.secSel[x.a.rp] = on;
+      el.setAttribute('aria-checked', on); el.parentNode.classList.toggle('off', !on);
+      var n = state.secarLista.filter(secSel).length, b = document.getElementById('secenv');
+      if (b) { b.disabled = !n; b.querySelector('span').textContent = envTxt(n); }
+    }
     function compartirSecar() {
-      var L = state.secarLista || [];
+      var L = (state.secarLista || []).filter(secSel); if (!L.length) return;
       var txt = '*Vacas para secar' + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' +
         'Secado del ' + A.fmt(state.fsec) + ' · hasta ' + A.SECADO + ' días antes del parto o menos de ' + secLts() + ' litros\n\n' +
         L.map(function (x) { return '*' + x.a.rp + '*' + (x.P ? ' · parto ' + A.fmt(x.P).slice(0, 5) + ' (' + x.dp + ' días)' : '') + (x.porL ? ' · ' + nf(x.lt, 1) + ' lts' : '') + (function () { var pt = postTacto(x.a); return pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') + (pt[0] ? ' ' + A.fmt(pt[0]).slice(0, 5) : '') : ''; })(); }).join('\n') +
@@ -2057,20 +2070,8 @@
       // 3) último diagnóstico de gestación (tacto) cargado, y vacas y vaquillonas pendientes de tacto
       // último día de tacto real: al menos 5 vacas en ordeñe tactadas ese día (no cuentan vaquillonas, secas ni diagnósticos sueltos
       // como un aborto cargado en la tabla de tactos)
-      var TMIN = 5, porDia = {}, ut = null;
-      DB.animales.forEach(function (a) {
-        var h = DB.hist[a.rp]; if (!h || !h.ta) return;
-        h.ta.forEach(function (t) {
-          if (t[0] > ref) return;
-          var lp = null; (h.pa || []).forEach(function (p) { if (p[0] < t[0]) lp = p; });
-          if (!lp || (lp[5] && lp[5] <= t[0])) return; // sin parto (vaquillona) o ya secada
-          porDia[t[0]] = (porDia[t[0]] || 0) + 1;
-        });
-      });
-      Object.keys(porDia).forEach(function (d) { if (porDia[d] >= TMIN && (!ut || d > ut)) ut = d; });
-      R.ultTactoN = ut ? porDia[ut] : null;
-      R.ultTacto = ut;
-      try { R.nTactar = A.tareas(DB.animales.filter(function (a) { return a.cat !== 'ternera'; }), today(), 30).tactar.length; } catch (e) { R.nTactar = null; }
+      var UT = ultTactoVacas(ref); R.ultTactoN = UT.n; R.ultTacto = UT.f;
+      try { R.nTactar = A.tareas(DB.animales.filter(function (a) { return a.cat === 'vaca'; }), today(), 30).tactar.length; } catch (e) { R.nTactar = null; }
       // 4) leche: litros por vaca del último mes con control, contra el mismo mes del año anterior
       var E = evolucion('lv'), u = E && E.meses[E.meses.length - 1];
       if (u && u.cur != null) R.le = { v: u.cur, prev: u.prev, mes: u.label, anio: u.anio };
@@ -6068,6 +6069,193 @@
       if (simple && dl !== '' && dl < PLT_PARIDA) return null;
       return ['PARIDA', dl];
     }
+    /* Último tacto de vacas (el mismo para el Panel y Voy mañana): último día con al menos 5 vacas en ordeñe tactadas
+       (no cuentan vaquillonas, secas ni diagnósticos sueltos como un aborto cargado en la tabla de tactos). */
+    function ultTactoVacas(ref) {
+      var TMIN = 5, porDia = {}, ut = null;
+      DB.animales.forEach(function (a) {
+        var h = DB.hist[a.rp]; if (!h || !h.ta) return;
+        h.ta.forEach(function (t) {
+          if (t[0] > ref) return;
+          var lp = null; (h.pa || []).forEach(function (p) { if (p[0] < t[0]) lp = p; });
+          if (!lp || (lp[5] && lp[5] <= t[0])) return; // sin parto (vaquillona) o ya secada
+          porDia[t[0]] = (porDia[t[0]] || 0) + 1;
+        });
+      });
+      Object.keys(porDia).forEach(function (d) { if (porDia[d] >= TMIN && (!ut || d > ut)) ut = d; });
+      return { f: ut, n: ut ? porDia[ut] : null };
+    }
+    /* ----- Yo te ayudo: arma el trabajo con lo que ya está en la base. Dos ayudas:
+       · Programar secados / Entradas a preparto: el productor toca en el almanaque los días; la app reparte las preñadas cuyo día
+         ideal (parto probable − días de seca o de preparto) cae en el mes: cada una va al último día marcado que todavía le deja
+         esos días antes del parto; si ninguno se los deja, va al primero (en rojo). Amarillo: más de 15 (secado) o 7 (preparto) días de más.
+       Los días marcados quedan guardados por tambo y mes. ----- */
+    var AYU_DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    var AYU = {
+      secar: { t: 'Programar secados', s: 'Repartí los secados del mes en los días que elijas', lead: function () { return A.SECADO; }, min: function () { return A.SECADO - 10; }, max: function () { return A.SECADO; }, rango: true, sug: true, u: 'de seca', vb: 'al secado', k: 'ayusec',
+        ok: function (a) { return a.cat === 'vaca' || !a.cat; } },
+      pre: { t: 'Entradas a preparto', s: 'Qué vacas y vaquillonas entran al preparto cada día', lead: function () { return A.PREPARTO; }, min: function () { return 20; }, max: function () { return A.PREPARTO; }, antes: true, sug: true, u: 'de preparto', vb: 'al preparto', k: 'ayupre',
+        ok: function (a) { return a.cat === 'vaca' || a.cat === 'seca' || a.cat === 'vaquillona' || !a.cat; } }
+    };
+    var AYU_BAJA = 14, AYU_ALTA = 22, AYU_MAXSECA = 90, AYU_CTRL = 45;
+    function ayuDia(f) { var d = AYU_DIAS[new Date(f + 'T12:00:00').getDay()]; return d.charAt(0).toUpperCase() + d.slice(1) + ' ' + A.fmt(f).slice(0, 5); }
+    function ayuMesN(o) { var d = new Date(today().slice(0, 7) + '-15T12:00:00'); d.setMonth(d.getMonth() + o); return d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1); }
+    function ayuMes() {
+      var hoy = today(), o = state.ayuOff || 0, m = ayuMesN(o);
+      var ult = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
+      return { m: m, ini: o ? m + '-01' : hoy, fin: m + '-' + (ult < 10 ? '0' : '') + ult, ult: ult };
+    }
+    function ayuFechas(k, m) { var v = []; try { v = JSON.parse(getP(k + ':' + m) || '[]'); } catch (e) {} return (v || []).filter(function (d) { return typeof d === 'string' && d.slice(0, 7) === m; }).sort(); }
+    // el reparto se hace con los días marcados de todos los meses juntos (de dos meses atrás a dos adelante): una vaca que se secó
+    // (o entró al preparto) en una tanda de diciembre ya no aparece en enero, y una de principios de enero puede ir a la última
+    // tanda de diciembre si ahí le quedan los días justos. Los días ya pasados cuentan como hechos.
+    function ayuDatos(C) {
+      var M = ayuMes(), hoy = today(), L = C.lead(), mn = C.min(), mx = C.max(), F = [], vacas = [];
+      [-2, -1, 0, 1, 2].forEach(function (o) { F = F.concat(ayuFechas(C.k, ayuMesN(o))); });
+      F.sort();
+      var fin2 = ayuMesN(2) + '-31';
+      DB.animales.forEach(function (a) {
+        if (a.estado !== 'prenada' || a.rech || !C.ok(a)) return;
+        // las que ya están secas no se vuelven a secar
+        if (C === AYU.secar && a.cat === 'seca') return;
+        var P = A.derive(a, hoy).partoProb; if (!P || A.diffDays(P, hoy) < 0) return;
+        var ideal = A.addDays(P, -L), x = { a: a, P: P, ideal: ideal };
+        // secado con la leche del último control (si es de los últimos 45 días): menos de 14 litros → se puede adelantar hasta
+        // 90 días antes del parto (su mes pasa a ser el del primer día posible); más de 22 litros → lo más tarde dentro del rango
+        if (C.rango) {
+          var c = ctLac(a), u = c.length ? c[c.length - 1] : null;
+          if (u && A.diffDays(hoy, u[0]) <= AYU_CTRL) {
+            x.lt = u[1];
+            if (u[1] < AYU_BAJA) { x.baja = true; var e = A.addDays(P, -AYU_MAXSECA); x.ideal = e < hoy ? hoy : e; if (x.ideal > ideal) x.ideal = ideal; }
+            else if (u[1] > AYU_ALTA) x.alta = true;
+          }
+        }
+        if (x.ideal > fin2) return;
+        vacas.push(x);
+      });
+      var T = {}; F.forEach(function (d) { T[d] = { d: d, v: [] }; });
+      vacas.forEach(function (x) {
+        var t = null, im = x.ideal.slice(0, 7);
+        // 0) leche baja: el primer día desde que puede secarse que le deje entre el mínimo y 90 días
+        if (x.baja) F.forEach(function (d) { var n = A.diffDays(x.P, d); if (!t && d >= x.ideal && n >= mn && n <= AYU_MAXSECA) t = d; });
+        // 1) un día que le deje los días justos (en cualquier mes). Secado: el último (más leche); preparto: el primero (entra antes)
+        if (!t) F.forEach(function (d) { var n = A.diffDays(x.P, d); if (n >= mn && n <= mx && (!t || !C.antes)) t = d; });
+        // 2) si no, el último día de su mes que deje el mínimo (o de un mes anterior sin pasarse demasiado); si ninguno, el primero de su mes (en rojo)
+        if (!t) F.forEach(function (d) { var n = A.diffDays(x.P, d); if (n >= mn && (d.slice(0, 7) === im || (d.slice(0, 7) < im && n <= mx + 15))) t = d; });
+        if (!t) F.forEach(function (d) { if (!t && d.slice(0, 7) === im) t = d; });
+        if (!t) return;
+        x.d = t; x.n = A.diffDays(x.P, t); T[t].v.push(x);
+      });
+      var TM = F.filter(function (d) { return d.slice(0, 7) === M.m; }).map(function (d) { T[d].v.sort(function (x, y) { return numRp(x.a, y.a); }); return T[d]; });
+      // las del mes: día ideal en el mes (el mes en curso suma las atrasadas); sin día todavía: las que no quedaron en ninguna tanda
+      var delMes = vacas.filter(function (x) { return x.ideal <= M.fin && (state.ayuOff ? x.ideal >= M.m + '-01' : true); });
+      var sinDia = delMes.filter(function (x) { return !x.d; }).length;
+      var otroMes = delMes.filter(function (x) { return x.d && x.d.slice(0, 7) !== M.m; }).length;
+      // días sugeridos (solo secado): la menor cantidad de días del mes con los que todas las vacas del mes que todavía no tienen
+      // un día dentro del rango queden secadas entre el mínimo y el máximo (p.ej. 50 a 60 días antes del parto)
+      var sug = [], difer = 0;
+      if (C.sug) {
+        var hoyM = M.ini, W = [];
+        var bajas = [];
+        delMes.forEach(function (x) {
+          if (x.d && x.n >= mn && (x.n <= mx || (x.baja && x.n <= AYU_MAXSECA))) return;
+          if (x.baja && C.rango) { bajas.push(x); return; }
+          var a0 = A.addDays(x.P, -mx), b0 = A.addDays(x.P, -mn);
+          if (a0 < hoyM) a0 = hoyM; if (b0 > M.fin) b0 = M.fin;
+          if (a0 > b0) return;
+          W.push([a0, b0]);
+        });
+        W.sort(function (u, v) { return u[1] < v[1] ? -1 : u[1] > v[1] ? 1 : 0; });
+        var cur = null;
+        W.forEach(function (w) {
+          if (cur && w[0] <= cur.d) { cur.n++; if (w[0] > cur.ini) cur.ini = w[0]; return; }
+          cur = { d: w[1], n: 1, ini: w[0] }; sug.push(cur);
+        });
+        // preparto: cada día sugerido se corre lo más temprano posible sin dejar afuera a ninguna (entran con más días)
+        if (C.antes) sug.forEach(function (g) { g.d = g.ini; });
+        // las de leche baja: el día más temprano (sugerido o ya elegido) que les sirva; si no hay, un día nuevo lo antes posible
+        // (también las de leche baja de meses anteriores que quedaron sin día y todavía pueden secarse en este mes)
+        if (C.rango) vacas.forEach(function (x) { if (x.baja && !x.d && x.ideal < M.m + '-01' && A.addDays(x.P, -mn) >= M.ini) bajas.push(x); });
+        var nuevos = [];
+        bajas.sort(function (u, v) { return u.ideal < v.ideal ? -1 : u.ideal > v.ideal ? 1 : 0; }).forEach(function (x) {
+          var a0 = x.ideal < M.ini ? M.ini : x.ideal, bR = A.addDays(x.P, -mn), b0 = bR > M.fin ? M.fin : bR; if (a0 > b0) return;
+          var g = sug.filter(function (y) { return y.d >= a0 && y.d <= b0; }).sort(function (u, v) { return u.d < v.d ? -1 : 1; })[0];
+          if (g) { g.n++; if (g.v) g.v.push(x); return; }
+          g = { d: a0, n: 1, v: [x], sigue: bR > M.fin }; sug.push(g); nuevos.push(g); sug.sort(function (u, v) { return u.d < v.d ? -1 : 1; });
+        });
+        // un día nuevo para una sola vaca de leche baja que también puede secarse el mes que viene: no se propone; pasa al mes siguiente
+        nuevos.forEach(function (g) { if (g.n === 1 && g.sigue) { difer++; sug.splice(sug.indexOf(g), 1); } });
+        sug = sug.filter(function (g) { return F.indexOf(g.d) < 0; });
+      }
+      return { M: M, T: TM, vacas: delMes, sinDia: Math.max(0, sinDia - difer), otroMes: otroMes, difer: difer, L: L, sug: sug };
+    }
+    function ayuMesesHTML() {
+      return '<div class="ayums">' + [0, 1, 2].map(function (o) { var n = MESL[+ayuMesN(o).slice(5, 7) - 1]; return '<button class="fchip plain" data-ayum="' + o + '" aria-pressed="' + ((state.ayuOff || 0) === o) + '">' + n.charAt(0).toUpperCase() + n.slice(1) + '</button>'; }).join('') + '</div>';
+    }
+    // almanaque del mes: lab(f) devuelve null (día común) o { c: clase, s: texto chico }
+    function ayuCalHTML(M, lab) {
+      var hoy = today(), mesN = MESL[+M.m.slice(5, 7) - 1], off = (new Date(M.m + '-01T12:00:00').getDay() + 6) % 7;
+      var cal = '<div class="aycal">' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(function (x) { return '<span class="dw">' + x + '</span>'; }).join('');
+      for (var i = 0; i < off; i++) cal += '<span></span>';
+      for (var d = 1; d <= M.ult; d++) {
+        var f = M.m + '-' + (d < 10 ? '0' : '') + d, l = lab(f);
+        if (f < M.ini) cal += '<span class="pas' + (l && l.c ? ' ' + l.c : '') + '">' + d + (l && l.s != null ? '<small>' + l.s + '</small>' : '') + '</span>';
+        else cal += '<button class="ayd' + (l ? ' ' + l.c : '') + (f === hoy ? ' hoy' : '') + '" data-ayud="' + f + '">' + d + (l && l.s != null ? '<small>' + l.s + '</small>' : '') + '</button>';
+      }
+      return '<section class="card aycard"><h2 class="aymt">' + mesN.charAt(0).toUpperCase() + mesN.slice(1) + ' ' + M.m.slice(0, 4) + '</h2>' + cal + '</div></section>';
+    }
+    var AYU_FLECHA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    var AYU_ENV = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    function ayuHTML() {
+      var volver = '<button class="backbtn" data-a="ayucerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>';
+      var k = state.ayu;
+      if (!AYU[k]) return '<div class="ayu">' + volver + '<h1 class="ptitle">Yo te ayudo</h1><p class="secnote">La app arma el trabajo con los datos del tambo.</p>' +
+        ['secar', 'pre'].map(function (x) { return '<button class="ayuop" data-ayuk="' + x + '"><span><b>' + AYU[x].t + '</b><small>' + AYU[x].s + '</small></span>' + AYU_FLECHA + '</button>'; }).join('') + '</div>';
+      var C = AYU[k], D = ayuDatos(C), M = D.M, L = D.L, mesN = MESL[+M.m.slice(5, 7) - 1], cnt = {};
+      D.T.forEach(function (t) { cnt[t.d] = t.v.length; });
+      var MN = C.min(), MX = C.max(), col = function (n) { return n < MN ? 'r' : n > MX ? 'a' : 'v'; };
+      var h = '<div class="ayu">' + volver + '<h1 class="ptitle">' + C.t + '</h1>' + ayuMesesHTML() +
+        '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (de ' + C.min() + ' a ' + C.max() + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
+        ayuCalHTML(M, function (f) { if (cnt[f] != null) return { c: 'on', s: cnt[f] + ' v' }; var g = D.sug.filter(function (y) { return y.d === f; })[0]; return g ? { c: 'sug', s: g.n + ' v' } : null; });
+      if (D.sug.length) h += '<p class="cap aysugl"><i></i>Sugerido: con estos días todas quedan de ' + MN + ' a ' + MX + ' días ' + C.u + (C.rango ? '; las de menos de ' + AYU_BAJA + ' litros, lo antes posible (hasta ' + AYU_MAXSECA + ' días); las de más de ' + AYU_ALTA + ' litros, lo más tarde' : '') + '</p><button class="btn ayusug" data-a="ayusug">Usar los días sugeridos</button>';
+      if (D.otroMes || D.sinDia || D.difer) h += '<p class="cap ayinfo">' + [D.otroMes ? D.otroMes + ' ya ' + (D.otroMes === 1 ? 'quedó' : 'quedaron') + ' en una tanda de otro mes' : '', D.difer ? D.difer + ' de leche baja ' + (D.difer === 1 ? 'pasa' : 'pasan') + ' a la primera tanda del mes que viene' : '', D.sinDia ? '<b>' + D.sinDia + ' sin día todavía</b>' : ''].filter(Boolean).join(' · ') + '</p>';
+      if (!D.T.length) h += '<p class="hint">' + (D.vacas.length ? 'Marcá en el almanaque los días y la app reparte las vacas.' : 'No hay preñadas que lleguen ' + C.vb + ' en ' + mesN + '.') + '</p>';
+      D.T.forEach(function (t) {
+        var ns = t.v.map(function (x) { return x.n; }), mn = Math.min.apply(null, ns), mx = Math.max.apply(null, ns), nr = ns.filter(function (n) { return n < MN; }).length;
+        h += '<section class="card aytan' + (t.d < today() ? ' hecha' : '') + '">' + (t.v.length ? '<button class="shic" data-a="ayuenv" data-d="' + t.d + '" aria-label="Enviar por WhatsApp" title="Enviar por WhatsApp"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + '<div class="ayth"><h2>' + ayuDia(t.d) + (t.d < today() ? ' <small class="ayhecha">ya pasó</small>' : '') + '</h2><span class="count">' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '</span></div>' +
+          (t.v.length ? '<p class="cap">' + (mn === mx ? mn : mn + ' a ' + mx) + ' días ' + C.u + (nr ? ' · <b class="ayr">' + nr + ' con menos de ' + MN + '</b>' : '') + '</p><div class="aychips">' +
+            t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a), cl = x.baja && x.n >= MN && x.n <= AYU_MAXSECA ? 'lb' : col(x.n); return '<button class="aych ' + cl + (pt ? ' alr' : '') + '" data-rp="' + esc(x.a.rp) + '"><b>' + esc(x.a.rp) + '</b><small>' + (x.a.cat === 'vaquillona' ? 'vaq · ' : '') + x.n + ' d' + (x.lt != null && (x.baja || x.alta) ? ' · ' + nf(x.lt, 0) + ' L' : '') + '</small></button>'; }).join('') + '</div>'
+            : '<p class="cap">Ningún animal para este día.</p>') + '</section>';
+      });
+      if (D.T.length) h += '<p class="cap ayley"><i class="v"></i>' + MN + ' a ' + MX + ' días <i class="a"></i>más de ' + MX + ' <i class="r"></i>menos de ' + MN + (k === 'secar' ? ' <i class="lb"></i>menos de ' + AYU_BAJA + ' L (se adelanta) <i class="x"></i>preñada + celo o servicio' : '') + '</p>';
+      return h + '</div>';
+    }
+    function ayuToggle(f) {
+      var C = AYU[state.ayu]; if (!C) return;
+      var M = ayuMes(), F = ayuFechas(C.k, M.m), i = F.indexOf(f);
+      if (i >= 0) F.splice(i, 1); else F.push(f);
+      setP(C.k + ':' + M.m, JSON.stringify(F.sort())); render();
+    }
+    function ayuUsarSug() {
+      var C = AYU[state.ayu]; if (!C) return;
+      var M = ayuMes(), F = ayuFechas(C.k, M.m);
+      ayuDatos(C).sug.forEach(function (g) { if (F.indexOf(g.d) < 0) F.push(g.d); });
+      setP(C.k + ':' + M.m, JSON.stringify(F.sort())); render();
+    }
+    function ayuEnviar(dia) {
+      var k = state.ayu, txt;
+      {
+        var C = AYU[k]; if (!C) return; var D = ayuDatos(C);
+        txt = '*' + C.t + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' + 'De ' + C.min() + ' a ' + C.max() + ' días del parto\n' +
+          D.T.filter(function (t) { return !dia || t.d === dia; }).map(function (t) {
+            return '\n*' + ayuDia(t.d) + '* · ' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '\n' +
+              t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return x.a.rp + (x.a.cat === 'vaquillona' ? ' (vaq.)' : '') + ' · ' + x.n + ' días ' + C.u + (x.lt != null && (x.baja || x.alta) ? ' · ' + nf(x.lt, 0) + ' L' : '') + (x.n < C.min() ? ' ⚠' : '') + (pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') : ''); }).join('\n');
+          }).join('\n');
+      }
+      txt += '\n\nDr. Mauro Torterolo';
+      if (navigator.share) navigator.share({ text: txt }).catch(function () {});
+      else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+    }
     /* ----- Voy mañana (modo veterinario): lo que hay que ver en la visita de mañana, en cuatro cuadros + leche y próximos 30 días.
        Todo calculado a la fecha de la visita (mañana). Sin descartes. A tocar: vacas en ordeñe servidas hace 35 días o más,
        vacías o con tacto sin preñez sin servicio después, y preñadas con celo o servicio después del tacto.
@@ -6107,7 +6295,7 @@
     function voyHTML() {
       var R = voyDatos(), DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
       var dsem = DIAS[new Date(R.ref + 'T12:00:00').getDay()];
-      var ult = '0000'; DB.animales.forEach(function (a) { if (a.tFecha && a.tFecha > ult) ult = a.tFecha; });
+      var ult = ultTactoVacas(today()).f || '0000';
       var volver = '<button class="backbtn" data-a="voycerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Volver</button>';
       if (state.voyLista) {
         var k = state.voyLista, items = k === 'alertas' ? R.atras.concat(R.repe) : k === 'prox' ? R.secar.concat(R.partos) : R[k];
@@ -6135,7 +6323,7 @@
       state.pltRef = refV || null;
       $('#sheetXTitle').textContent = 'Planilla de tacto' + (refV ? ' para el ' + A.fmt(refV) : '');
       $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 6px">Vacas en ordeñe por caravana, en tres columnas para imprimir y anotar en el corral.</p>' +
-        '<p class="cap"><b>Completa:</b> todas las vacas en ordeñe. <b>Para bastón:</b> ID de trazabilidad (858 0000 + los 8 números del ID electrónico), caravana y lo que dice la planilla completa, para cargar en el lector. <b>Simple:</b> sin preñadas, descartes ni paridas de menos de ' + PLT_PARIDA + ' días; de las preñadas solo van las que hay que secar (por la fecha de Para secar, el ' + A.fmt(fechaSecado()) + ', o con menos de ' + secLts() + ' litros) y las que tienen celo o servicio después del tacto, que salen marcadas en rojo.</p>';
+        '<p class="cap"><b>Completa:</b> todas las vacas en ordeñe. <b>Para bastón:</b> ID de trazabilidad (858 0000 + los 8 números del ID electrónico), caravana y lo que dice la planilla completa, para cargar en el lector. <b>Simple:</b> sin preñadas, descartes ni paridas de menos de ' + PLT_PARIDA + ' días; de las preñadas solo van las que hay que secar (a ' + A.SECADO + ' días o menos del parto el día del tacto, o con menos de ' + secLts() + ' litros) y las que tienen celo o servicio después del tacto, que salen marcadas en rojo.</p>';
       $('#xbtns').innerHTML = '<button class="btn primary big" data-a="plt" data-m="simple">Planilla simple</button><button class="btn big" data-a="plt" data-m="completa">Planilla completa</button><button class="btn big" data-a="plt" data-m="baston">Planilla para bastón</button><button class="btn" data-a="xcancel">Cancelar</button>';
       $('#sheetX').hidden = false;
     }
@@ -6223,7 +6411,7 @@
     function planillaTacto(modo, refV) {
       if (modo === 'baston') { planillaBaston(refV); return; }
       var simple = modo === 'simple', ref = refV || today(), secar = {};
-      if (simple) listaSecado(fechaSecado()).forEach(function (x) { secar[x.a.rp] = x; });
+      if (simple) listaSecado(ref).forEach(function (x) { secar[x.a.rp] = x; });
       var F = {}, L = DB.animales.filter(function (a) { if (a.cat !== 'vaca') return false; var f = planillaFila(a, ref, simple, secar); if (!f) return false; F[a.rp] = f; return true; }).sort(numRp);
       if (!L.length) { toast('No hay vacas para la planilla.'); return; }
       var X = function (v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
@@ -6231,7 +6419,6 @@
       // 45 vacas por columna, 135 por hoja; la hoja se escala al papel (alto y ancho)
       var FP = PLT_FILAS;
       var pags = Math.ceil(L.length / (FP * 3)), filas = [];
-      var HT = 16.5; // 45 filas llenan una hoja A4
       for (var pg = 0; pg < pags; pg++) for (var r = 0; r < FP; r++) {
         var celdas = [], hay = false;
         for (var c = 0; c < 3; c++) {
@@ -6242,27 +6429,34 @@
           if (f[1] !== '') celdas.push('<c r="' + col(b + 2) + fila + '" s="' + (f[2] ? 6 : 3) + '"><v>' + f[1] + '</v></c>');
           celdas.push('<c r="' + col(b + 3) + fila + '" s="4"/>');
         }
-        if (hay) filas.push('<row r="' + (pg * FP + r + 1) + '" ht="' + HT + '" customHeight="1">' + celdas.join('') + '</row>');
+        if (hay) filas.push('<row r="' + (pg * FP + r + 1) + '" ht="@HT@" customHeight="1">' + celdas.join('') + '</row>');
       }
       // ancho de la caravana según el largo (4 cifras como SysCaw; 5 o más en DelPro)
       var lmax = 0; L.forEach(function (a) { if (a.rp.length > lmax) lmax = a.rp.length; });
       var ws = [Math.max(6.33, lmax * 1.45 + 0.6), 12, 4.5, 12], cols = '';
       for (var k = 0; k < 12; k++) cols += '<col min="' + (k + 1) + '" max="' + (k + 1) + '" width="' + ws[k % 4] + '" customWidth="1"/>';
+      /* Escala fija (no "ajustar a página"): con ajustar a página Excel ignora los saltos manuales y rellena cada hoja con
+         filas de la tanda siguiente. La escala sale del ancho de las 3 columnas en A4 y el alto de fila se calcula para que
+         las 45 filas llenen la hoja, con un poco de margen. */
+      var anchoIn = (ws[0] + ws[1] + ws[2] + ws[3]) * 3 * 7.4 / 96 * 1.03;
+      var ESC = Math.max(40, Math.min(100, Math.floor(7.5 / anchoIn * 100)));
+      // alto útil de A4 con márgenes mínimos (arriba 0,5" y abajo 0,3"): las filas llenan el 98,5 %
+      var HT = Math.max(14, Math.min(26, Math.floor((11.69 - 0.5 - 0.3) * 72 * 0.985 / (FP * ESC / 100) * 2) / 2));
       var cortes = ''; for (pg = 1; pg < pags; pg++) cortes += '<brk id="' + pg * FP + '" max="16383" man="1"/>';
       var tit = (simple ? 'Tacto simple · ' : 'Tacto · ') + (PERFIL.nombre || 'Tambo') + ' · ' + A.fmt(ref);
-      var hoja = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><cols>' + cols + '</cols><sheetData>' + filas.join('') + '</sheetData>' +
-        '<pageMargins left="0.4" right="0.3" top="0.6" bottom="0.4" header="0.25" footer="0.2"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="' + pags + '"/>' +
+      var hoja = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>' + cols + '</cols><sheetData>' + filas.join('').split('@HT@').join(String(HT)) + '</sheetData>' +
+        '<pageMargins left="0.4" right="0.3" top="0.5" bottom="0.3" header="0.2" footer="0.1"/><pageSetup paperSize="9" orientation="portrait" scale="' + ESC + '"/>' +
         '<headerFooter><oddHeader>' + X('&C&"-,Bold"' + tit) + '</oddHeader><oddFooter>' + X('&CPágina &P de &N') + '</oddFooter></headerFooter>' +
         (cortes ? '<rowBreaks count="' + (pags - 1) + '" manualBreakCount="' + (pags - 1) + '">' + cortes + '</rowBreaks>' : '') + '</worksheet>';
       var estilos = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-        '<fonts count="3"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="13"/><name val="Calibri"/></font><font><b/><sz val="10"/><color rgb="FFC00000"/><name val="Calibri"/></font></fonts>' +
+        '<fonts count="4"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFC00000"/><name val="Calibri"/></font><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
         '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
         '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FFB0B0B0"/></bottom><diagonal/></border></borders>' +
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
         '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
         '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment vertical="center"/></xf>' +
-        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"><alignment vertical="center"/></xf>' +
-        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"><alignment horizontal="center" vertical="center"/></xf>' +
+        '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment vertical="center"/></xf>' +
+        '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf>' +
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>' +
         '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment vertical="center"/></xf>' +
         '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf></cellXfs>' +
@@ -6282,7 +6476,7 @@
       $('#sheetXTitle').textContent = (simple ? 'Planilla simple · ' : 'Planilla completa · ') + L.length + ' vacas';
       $('#xopts').innerHTML = '<p class="cap" style="margin:0 0 6px">Vacas en ordeñe por caravana, en tres columnas para imprimir (' + pags + (pags === 1 ? ' hoja' : ' hojas') + ').' + (simple ? ' Sin preñadas, descartes ni paridas de menos de ' + PLT_PARIDA + ' días.' : '') + '</p>' +
         (nAl ? '<p class="ralerta">⚠ ' + nAl + (nAl === 1 ? ' vaca preñada tiene' : ' vacas preñadas tienen') + ' celo o servicio después del tacto (en rojo en la planilla).</p>' : '') +
-        '<details class="nota"><summary>Qué dice cada vaca</summary><p class="cap">' + (simple ? '' : 'Preñada: fecha probable de parto · ') + 'REVISAR: servida hace ' + A.DX_MIN + ' días o más · PARCHE: servida hace menos de ' + A.DX_MIN + ' días (el número son los días de servida) · PARIDA: sin servicio ni tacto, con los días de parida · con tacto sin preñez: el resultado y los días de parida · ' + (simple ? 'SECAR: preñada para secar el ' + A.fmt(fechaSecado()) + ' (días al parto) · SECAR LTS: preñada con menos de ' + secLts() + ' litros en el último control · ' : 'DESCARTE · ') + 'PREÑ+CELO / PREÑ+SERV: preñada con celo o servicio después del tacto (días desde ese celo o servicio)' + (simple ? ' · SECAR+CELO / SECAR+SERV: lo mismo, en una vaca que hay que secar' : '') + '. Al lado de cada vaca queda una columna en blanco para anotar.</p></details>' +
+        '<details class="nota"><summary>Qué dice cada vaca</summary><p class="cap">' + (simple ? '' : 'Preñada: fecha probable de parto · ') + 'REVISAR: servida hace ' + A.DX_MIN + ' días o más · PARCHE: servida hace menos de ' + A.DX_MIN + ' días (el número son los días de servida) · PARIDA: sin servicio ni tacto, con los días de parida · con tacto sin preñez: el resultado y los días de parida · ' + (simple ? 'SECAR: preñada a ' + A.SECADO + ' días o menos del parto el ' + A.fmt(ref) + ', día del tacto (días al parto) · SECAR LTS: preñada con menos de ' + secLts() + ' litros en el último control · ' : 'DESCARTE · ') + 'PREÑ+CELO / PREÑ+SERV: preñada con celo o servicio después del tacto (días desde ese celo o servicio)' + (simple ? ' · SECAR+CELO / SECAR+SERV: lo mismo, en una vaca que hay que secar' : '') + '. Al lado de cada vaca queda una columna en blanco para anotar.</p></details>' +
         '<p class="cap">' + ['Revisar', 'Parche', 'Paridas', 'Con tacto sin preñez', 'Para secar', 'Preñadas con celo o servicio', 'Preñadas', 'Descarte'].filter(function (k) { return cu[k]; }).map(function (k) { return '<b>' + cu[k] + '</b> ' + k.toLowerCase(); }).join(' · ') + '</p>' +
         '<div class="xprev">' + L.map(function (a) { var f = F[a.rp]; return '<div><b>' + esc(a.rp) + '</b><span' + (f[2] ? ' style="color:var(--vacia);font-weight:700"' : '') + '>' + esc(f[0] + (f[1] !== '' ? ' ' + String(f[1]).replace('.', ',') : '')) + '</span></div>'; }).join('') + '</div><p class="cap">Archivo: ' + esc(nombre) + '</p>';
       var puede = !!(navigator.share && file);
@@ -6360,6 +6554,7 @@
       }
       // Voy mañana va después de la ficha: tocar una vaca de sus listas abre su ficha, y Volver vuelve a la lista
       if (state.voy && esVet() && DB.animales.length) { main.innerHTML = voyHTML(); return; }
+      if (state.ayu && DB.animales.length && !esOperario()) { main.innerHTML = ayuHTML(); return; }
       var err = iosTipHTML() + (state.error ? '<p class="error" role="alert">' + esc(state.error) + '</p>' : '');
       if (state.tab === 'tareas') main.innerHTML = err + tareasHTML();
       else if (state.tab === 'rodeo') { main.innerHTML = err + rodeoHTML(); plegarFicha(main); vetCompartir(main); }
@@ -6378,6 +6573,10 @@
       if (cpt) { ctlToque(cpt, e); return; }
       if ((cpt = e.target.closest('[data-ctlmax]'))) { setP('ctlmax', cpt.dataset.ctlmax); render(); return; }
       if ((cpt = e.target.closest('[data-ctlmas]'))) { var mm = cpt.previousElementSibling; if (mm) mm.hidden = false; cpt.remove(); return; }
+      if ((cpt = e.target.closest('[data-secck]'))) { secToggle(cpt); return; }
+      if ((cpt = e.target.closest('[data-ayud]'))) { ayuToggle(cpt.dataset.ayud); return; }
+      if ((cpt = e.target.closest('[data-ayuk]'))) { state.ayu = cpt.dataset.ayuk; render(); window.scrollTo(0, 0); return; }
+      if ((cpt = e.target.closest('[data-ayum]'))) { state.ayuOff = +cpt.dataset.ayum; render(); return; }
       var row = e.target.closest('[data-rp]');
       if (row) { openFicha(row.getAttribute('data-rp')); return; }
       var el;
@@ -6517,6 +6716,10 @@
       else if (a === 'base') exportarBase();
       else if (a === 'vetclave') copiarClaveVet();
       else if (a === 'basein') { closeSheet(); $('#baseFile').click(); }
+      else if (a === 'ayu') { state.ayu = 'menu'; render(); window.scrollTo(0, 0); }
+      else if (a === 'ayucerrar') { state.ayu = state.ayu && state.ayu !== 'menu' ? 'menu' : false; render(); window.scrollTo(0, 0); }
+      else if (a === 'ayuenv') ayuEnviar(b.dataset.d);
+      else if (a === 'ayusug') ayuUsarSug();
       else if (a === 'voy') { state.voy = true; state.voyLista = null; render(); window.scrollTo(0, 0); }
       else if (a === 'voycerrar') { if (state.voyLista) state.voyLista = null; else state.voy = false; render(); window.scrollTo(0, 0); }
       else if (a === 'voyleche') { state.voy = false; state.voyLista = null; setTab('leche'); }
@@ -6558,9 +6761,13 @@
       if ((e.target.id === 'insd0' || e.target.id === 'insd1') && e.target.value) { var k = e.target.id === 'insd0' ? 'insD0' : 'insD1'; state[k] = e.target.value; setP(k.toLowerCase(), e.target.value); render(); return; }
       if (e.target.dataset && e.target.dataset.ip) { var Pp = insPrecios(), v = parseFloat(String(e.target.value).replace(',', '.')); Pp[e.target.dataset.ip] = isFinite(v) && v >= 0 ? v : null; setP('insprec', JSON.stringify(Pp)); if (state.insR) render(); return; }
       if (e.target.dataset && e.target.dataset.sf && e.target.tagName === 'SELECT') { sanInput(e.target); return; }
+      if (e.target.id === 'seclr') { var ln = Math.round(e.target.value); if (SECLTS.indexOf(ln) >= 0) { state.secLts = ln; try { localStorage.setItem('libreta:seclts', String(ln)); } catch (x) {} render(); } return; }
+      if (e.target.id === 'secr') { var sn = Math.round(e.target.value); if (SECS.indexOf(sn) >= 0) { A.setSecado(sn); try { localStorage.setItem('libreta:secado', String(sn)); } catch (x) {} render(); } return; }
       if (e.target.id === 'fsec' && e.target.value) { state.fsec = e.target.value; setP('fsec', state.fsec); render(); }
     });
     document.addEventListener('input', function (e) {
+      if (e.target.id === 'seclr') { var lv = document.getElementById('seclv'); if (lv) lv.textContent = Math.round(e.target.value); return; }
+      if (e.target.id === 'secr') { var sv = document.getElementById('secv'); if (sv) sv.textContent = Math.round(e.target.value); return; }
       if (e.target.dataset && e.target.dataset.sf && e.target.tagName !== 'SELECT') { sanInput(e.target); return; }
       if (e.target.dataset && e.target.dataset.vn) { var w = parseInt(e.target.value, 10); state.vtaDraft[e.target.dataset.vn] = w > 0 ? w : null; vtaCuenta(); return; }
       if (e.target.dataset && e.target.dataset.xn) { var v = parseInt(e.target.value, 10); state.xf[e.target.dataset.xn] = v > 0 ? v : null; xActualizarCuenta(); return; }
