@@ -6056,7 +6056,7 @@
        Los días marcados quedan guardados por tambo y mes. ----- */
     var AYU_DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     var AYU = {
-      secar: { t: 'Programar secados', s: 'Repartí los secados del mes en los días que elijas', lead: function () { return A.SECADO; }, min: function () { return A.SECADO; }, max: function () { return A.SECADO + 15; }, u: 'de seca', vb: 'al secado', k: 'ayusec',
+      secar: { t: 'Programar secados', s: 'Repartí los secados del mes en los días que elijas', lead: function () { return A.SECADO; }, min: function () { return A.SECADO - 10; }, max: function () { return A.SECADO; }, rango: true, u: 'de seca', vb: 'al secado', k: 'ayusec',
         ok: function (a) { return a.cat === 'vaca' || !a.cat; } },
       pre: { t: 'Entradas a preparto', s: 'Qué vacas y vaquillonas entran al preparto cada día', lead: function () { return A.PREPARTO; }, min: function () { return 20; }, max: function () { return A.PREPARTO; }, antes: true, u: 'de preparto', vb: 'al preparto', k: 'ayupre',
         ok: function (a) { return a.cat === 'vaca' || a.cat === 'seca' || a.cat === 'vaquillona' || !a.cat; } }
@@ -6129,7 +6129,7 @@
       D.T.forEach(function (t) { cnt[t.d] = t.v.length; });
       var MN = C.min(), MX = C.max(), col = function (n) { return n < MN ? 'r' : n > MX ? 'a' : 'v'; };
       var h = '<div class="ayu">' + volver + '<h1 class="ptitle">' + C.t + '</h1>' + ayuMesesHTML() +
-        '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (' + (C.antes ? 'de ' + C.min() + ' a ' + L : 'a ' + L) + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
+        '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (de ' + C.min() + ' a ' + C.max() + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
         ayuCalHTML(M, function (f) { return cnt[f] != null ? { c: 'on', s: cnt[f] + ' v' } : null; });
       if (D.otroMes || D.sinDia) h += '<p class="cap ayinfo">' + [D.otroMes ? D.otroMes + ' ya ' + (D.otroMes === 1 ? 'quedó' : 'quedaron') + ' en una tanda de otro mes' : '', D.sinDia ? '<b>' + D.sinDia + ' sin día todavía</b>' : ''].filter(Boolean).join(' · ') + '</p>';
       if (!D.T.length) h += '<p class="hint">' + (D.vacas.length ? 'Marcá en el almanaque los días y la app reparte las vacas.' : 'No hay preñadas que lleguen ' + C.vb + ' en ' + mesN + '.') + '</p>';
@@ -6154,7 +6154,7 @@
       var k = state.ayu, txt;
       {
         var C = AYU[k]; if (!C) return; var D = ayuDatos(C);
-        txt = '*' + C.t + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' + (C.antes ? 'De ' + C.min() + ' a ' + D.L : 'A ' + D.L) + ' días del parto\n' +
+        txt = '*' + C.t + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' + 'De ' + C.min() + ' a ' + C.max() + ' días del parto\n' +
           D.T.map(function (t) {
             return '\n*' + ayuDia(t.d) + '* · ' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '\n' +
               t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return x.a.rp + (x.a.cat === 'vaquillona' ? ' (vaq.)' : '') + ' · ' + x.n + ' días ' + C.u + (x.n < C.min() ? ' ⚠' : '') + (pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') : ''); }).join('\n');
