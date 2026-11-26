@@ -6056,9 +6056,9 @@
        Los días marcados quedan guardados por tambo y mes. ----- */
     var AYU_DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     var AYU = {
-      secar: { t: 'Programar secados', s: 'Repartí los secados del mes en los días que elijas', lead: function () { return A.SECADO; }, min: function () { return A.SECADO - 10; }, max: function () { return A.SECADO; }, rango: true, u: 'de seca', vb: 'al secado', k: 'ayusec',
+      secar: { t: 'Programar secados', s: 'Repartí los secados del mes en los días que elijas', lead: function () { return A.SECADO; }, min: function () { return A.SECADO - 10; }, max: function () { return A.SECADO; }, rango: true, sug: true, u: 'de seca', vb: 'al secado', k: 'ayusec',
         ok: function (a) { return a.cat === 'vaca' || !a.cat; } },
-      pre: { t: 'Entradas a preparto', s: 'Qué vacas y vaquillonas entran al preparto cada día', lead: function () { return A.PREPARTO; }, min: function () { return 20; }, max: function () { return A.PREPARTO; }, antes: true, u: 'de preparto', vb: 'al preparto', k: 'ayupre',
+      pre: { t: 'Entradas a preparto', s: 'Qué vacas y vaquillonas entran al preparto cada día', lead: function () { return A.PREPARTO; }, min: function () { return 20; }, max: function () { return A.PREPARTO; }, antes: true, sug: true, u: 'de preparto', vb: 'al preparto', k: 'ayupre',
         ok: function (a) { return a.cat === 'vaca' || a.cat === 'seca' || a.cat === 'vaquillona' || !a.cat; } }
     };
     var AYU_BAJA = 14, AYU_ALTA = 22, AYU_MAXSECA = 90, AYU_CTRL = 45;
@@ -6118,12 +6118,12 @@
       // días sugeridos (solo secado): la menor cantidad de días del mes con los que todas las vacas del mes que todavía no tienen
       // un día dentro del rango queden secadas entre el mínimo y el máximo (p.ej. 50 a 60 días antes del parto)
       var sug = [], difer = 0;
-      if (C.rango) {
+      if (C.sug) {
         var hoyM = M.ini, W = [];
         var bajas = [];
         delMes.forEach(function (x) {
           if (x.d && x.n >= mn && (x.n <= mx || (x.baja && x.n <= AYU_MAXSECA))) return;
-          if (x.baja) { bajas.push(x); return; }
+          if (x.baja && C.rango) { bajas.push(x); return; }
           var a0 = A.addDays(x.P, -mx), b0 = A.addDays(x.P, -mn);
           if (a0 < hoyM) a0 = hoyM; if (b0 > M.fin) b0 = M.fin;
           if (a0 > b0) return;
@@ -6132,12 +6132,14 @@
         W.sort(function (u, v) { return u[1] < v[1] ? -1 : u[1] > v[1] ? 1 : 0; });
         var cur = null;
         W.forEach(function (w) {
-          if (cur && w[0] <= cur.d) { cur.n++; return; }
-          cur = { d: w[1], n: 1 }; sug.push(cur);
+          if (cur && w[0] <= cur.d) { cur.n++; if (w[0] > cur.ini) cur.ini = w[0]; return; }
+          cur = { d: w[1], n: 1, ini: w[0] }; sug.push(cur);
         });
+        // preparto: cada día sugerido se corre lo más temprano posible sin dejar afuera a ninguna (entran con más días)
+        if (C.antes) sug.forEach(function (g) { g.d = g.ini; });
         // las de leche baja: el día más temprano (sugerido o ya elegido) que les sirva; si no hay, un día nuevo lo antes posible
         // (también las de leche baja de meses anteriores que quedaron sin día y todavía pueden secarse en este mes)
-        vacas.forEach(function (x) { if (x.baja && !x.d && x.ideal < M.m + '-01' && A.addDays(x.P, -mn) >= M.ini) bajas.push(x); });
+        if (C.rango) vacas.forEach(function (x) { if (x.baja && !x.d && x.ideal < M.m + '-01' && A.addDays(x.P, -mn) >= M.ini) bajas.push(x); });
         var nuevos = [];
         bajas.sort(function (u, v) { return u.ideal < v.ideal ? -1 : u.ideal > v.ideal ? 1 : 0; }).forEach(function (x) {
           var a0 = x.ideal < M.ini ? M.ini : x.ideal, bR = A.addDays(x.P, -mn), b0 = bR > M.fin ? M.fin : bR; if (a0 > b0) return;
@@ -6179,7 +6181,7 @@
       var h = '<div class="ayu">' + volver + '<h1 class="ptitle">' + C.t + '</h1>' + ayuMesesHTML() +
         '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (de ' + C.min() + ' a ' + C.max() + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
         ayuCalHTML(M, function (f) { if (cnt[f] != null) return { c: 'on', s: cnt[f] + ' v' }; var g = D.sug.filter(function (y) { return y.d === f; })[0]; return g ? { c: 'sug', s: g.n + ' v' } : null; });
-      if (D.sug.length) h += '<p class="cap aysugl"><i></i>Sugerido: con estos días todas quedan de ' + MN + ' a ' + MX + ' días de seca; las de menos de ' + AYU_BAJA + ' litros, lo antes posible (hasta ' + AYU_MAXSECA + ' días); las de más de ' + AYU_ALTA + ' litros, lo más tarde</p><button class="btn ayusug" data-a="ayusug">Usar los días sugeridos</button>';
+      if (D.sug.length) h += '<p class="cap aysugl"><i></i>Sugerido: con estos días todas quedan de ' + MN + ' a ' + MX + ' días ' + C.u + (C.rango ? '; las de menos de ' + AYU_BAJA + ' litros, lo antes posible (hasta ' + AYU_MAXSECA + ' días); las de más de ' + AYU_ALTA + ' litros, lo más tarde' : '') + '</p><button class="btn ayusug" data-a="ayusug">Usar los días sugeridos</button>';
       if (D.otroMes || D.sinDia || D.difer) h += '<p class="cap ayinfo">' + [D.otroMes ? D.otroMes + ' ya ' + (D.otroMes === 1 ? 'quedó' : 'quedaron') + ' en una tanda de otro mes' : '', D.difer ? D.difer + ' de leche baja ' + (D.difer === 1 ? 'pasa' : 'pasan') + ' a la primera tanda del mes que viene' : '', D.sinDia ? '<b>' + D.sinDia + ' sin día todavía</b>' : ''].filter(Boolean).join(' · ') + '</p>';
       if (!D.T.length) h += '<p class="hint">' + (D.vacas.length ? 'Marcá en el almanaque los días y la app reparte las vacas.' : 'No hay preñadas que lleguen ' + C.vb + ' en ' + mesN + '.') + '</p>';
       D.T.forEach(function (t) {
