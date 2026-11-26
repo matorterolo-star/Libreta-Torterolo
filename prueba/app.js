@@ -6383,7 +6383,6 @@
       // 45 vacas por columna, 135 por hoja; la hoja se escala al papel (alto y ancho)
       var FP = PLT_FILAS;
       var pags = Math.ceil(L.length / (FP * 3)), filas = [];
-      var HT = 16.5; // 45 filas llenan una hoja A4
       for (var pg = 0; pg < pags; pg++) for (var r = 0; r < FP; r++) {
         var celdas = [], hay = false;
         for (var c = 0; c < 3; c++) {
@@ -6394,16 +6393,22 @@
           if (f[1] !== '') celdas.push('<c r="' + col(b + 2) + fila + '" s="' + (f[2] ? 6 : 3) + '"><v>' + f[1] + '</v></c>');
           celdas.push('<c r="' + col(b + 3) + fila + '" s="4"/>');
         }
-        if (hay) filas.push('<row r="' + (pg * FP + r + 1) + '" ht="' + HT + '" customHeight="1">' + celdas.join('') + '</row>');
+        if (hay) filas.push('<row r="' + (pg * FP + r + 1) + '" ht="@HT@" customHeight="1">' + celdas.join('') + '</row>');
       }
       // ancho de la caravana según el largo (4 cifras como SysCaw; 5 o más en DelPro)
       var lmax = 0; L.forEach(function (a) { if (a.rp.length > lmax) lmax = a.rp.length; });
       var ws = [Math.max(6.33, lmax * 1.45 + 0.6), 12, 4.5, 12], cols = '';
       for (var k = 0; k < 12; k++) cols += '<col min="' + (k + 1) + '" max="' + (k + 1) + '" width="' + ws[k % 4] + '" customWidth="1"/>';
+      /* Escala fija (no "ajustar a página"): con ajustar a página Excel ignora los saltos manuales y rellena cada hoja con
+         filas de la tanda siguiente. La escala sale del ancho de las 3 columnas en A4 y el alto de fila se calcula para que
+         las 45 filas llenen la hoja, con un poco de margen. */
+      var anchoIn = (ws[0] + ws[1] + ws[2] + ws[3]) * 3 * 7.4 / 96 * 1.03;
+      var ESC = Math.max(40, Math.min(100, Math.floor(7.5 / anchoIn * 100)));
+      var HT = Math.max(14, Math.min(22, Math.floor(10.3 * 72 / (FP * ESC / 100) * 2) / 2));
       var cortes = ''; for (pg = 1; pg < pags; pg++) cortes += '<brk id="' + pg * FP + '" max="16383" man="1"/>';
       var tit = (simple ? 'Tacto simple · ' : 'Tacto · ') + (PERFIL.nombre || 'Tambo') + ' · ' + A.fmt(ref);
-      var hoja = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><cols>' + cols + '</cols><sheetData>' + filas.join('') + '</sheetData>' +
-        '<pageMargins left="0.4" right="0.3" top="0.6" bottom="0.4" header="0.25" footer="0.2"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="' + pags + '"/>' +
+      var hoja = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>' + cols + '</cols><sheetData>' + filas.join('').split('@HT@').join(String(HT)) + '</sheetData>' +
+        '<pageMargins left="0.4" right="0.3" top="0.6" bottom="0.4" header="0.25" footer="0.2"/><pageSetup paperSize="9" orientation="portrait" scale="' + ESC + '"/>' +
         '<headerFooter><oddHeader>' + X('&C&"-,Bold"' + tit) + '</oddHeader><oddFooter>' + X('&CPágina &P de &N') + '</oddFooter></headerFooter>' +
         (cortes ? '<rowBreaks count="' + (pags - 1) + '" manualBreakCount="' + (pags - 1) + '">' + cortes + '</rowBreaks>' : '') + '</worksheet>';
       var estilos = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
