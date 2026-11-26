@@ -1111,6 +1111,7 @@
       $('#btnCerrar').textContent = esVet() ? 'Cerrar' : 'Cancelar';
       $('#nTambos').hidden = esOperario();
       $('#btnVet').textContent = esVet() ? 'Modo veterinario activo · salir' : 'Modo veterinario';
+      $('#btnVet').hidden = !esVet(); // productores y operarios no ven el botón; el veterinario lo prende con el link …/#vet
       $('#actInfo').textContent = esVet() ? '' : ACT.length ? 'Activada para: ' + ACT.map(function (x) { return (x.n || ('productor ' + x.p.join(', '))) + (x.r === 'op' ? ' (operario)' : ''); }).join(' · ') : 'Sin activar';
       $('#sheet').hidden = false;
       if (!fijo) setTimeout(function () { $('#inNombre').focus(); }, 60);
@@ -1174,6 +1175,7 @@
     window.addEventListener('hashchange', function () {
       // un link de libreta abierto con la app ya abierta en el navegador (iPhone/Safari solo cambia el #, no recarga la página)
       if (/#libreta=/.test(location.hash || '')) { state.error = null; leerLibreta(); return; }
+      if (vetDeHash()) return;
       var tenia = !!state.rp, r = rpDeHash();
       if (r === state.rp) return;
       state.rp = r;
@@ -5309,6 +5311,13 @@
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(k).then(function () { toast('Clave copiada. Pegala en un lugar seguro.'); }, manual);
       else manual();
     }
+    // entrada al modo veterinario en un teléfono nuevo: abrir la app con el link …/#vet (el botón de Ajustes ya no se ve fuera del modo veterinario)
+    function vetDeHash() {
+      if ((location.hash || '') !== '#vet') return false;
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { location.hash = ''; }
+      if (!esVet()) setTimeout(modoVet, 400);
+      return true;
+    }
     function modoVet() {
       if (esVet()) { if (confirm('¿Salir del modo veterinario en este teléfono? Vas a necesitar tu clave para volver.')) { try { localStorage.removeItem('libreta:vet'); } catch (e) {} closeSheet(); toast('Modo veterinario desactivado'); } return; }
       var k = (prompt('Pegá tu clave de veterinario') || '').trim(); if (!k) return;
@@ -6794,6 +6803,7 @@
       var n2 = limpiarNombre(PERFIL.nombre); if (n2 !== (PERFIL.nombre || '')) { PERFIL.nombre = n2; cambio = true; }
       if (cambio) { saveTambos(); savePerfil(); render(); }
     });
+    vetDeHash();
     if (!leerLibreta()) { leerActivacion(); leerPrecarga(); listo.then(function () { setTimeout(actualizarDesdeLink, 800); }); }
     listo.then(function () { setTimeout(revisarBloqueos, 400); });
     listo.then(function () { setTimeout(sanFetch, 600); });
