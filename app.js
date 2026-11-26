@@ -4491,7 +4491,34 @@
     /* ----- activación por tambo: links firmados por el Dr. Mauro Torterolo ----- */
     var PUBKEY = {"kty":"EC","crv":"P-256","x":"-zikzRKxDR2Iml5AuWh6PgDIipwqr1fpHjwct7moAoQ","y":"eWwwwoCwgfWupZrAebMISU7Yx3aUlhEYOoAJ79GFda0"};
     var ACT = []; try { ACT = JSON.parse(localStorage.getItem('libreta:act')) || []; } catch (e) { ACT = []; }
-    function esVet() { try { return !!localStorage.getItem('libreta:vet'); } catch (e) { return false; } }
+    // modo veterinario: no alcanza con que haya algo guardado; tiene que ser la clave privada que corresponde a PUBKEY
+    // (control rápido acá; la firma real se comprueba al guardarla y cada vez que abre la app, ver vetRevisar)
+    var _vetK = null, _vetOK = false;
+    function esVet() {
+      var k = null; try { k = localStorage.getItem('libreta:vet'); } catch (e) { return false; }
+      if (!k) return false;
+      if (k === _vetK) return _vetOK;
+      _vetK = k; _vetOK = false;
+      try { var j = JSON.parse(new TextDecoder().decode(unb64u(k.replace(/^MTV1\./, '')))); _vetOK = !!(j && j.d && j.x === '-zikzRKxDR2Iml5AuWh6PgDIipwqr1fpHjwct7moAoQ' && j.y === 'eWwwwoCwgfWupZrAebMISU7Yx3aUlhEYOoAJ79GFda0'); } catch (e) { _vetOK = false; }
+      return _vetOK;
+    }
+    // comprueba de verdad una clave (firma y verifica); nunca tira error: devuelve true o false
+    function vetClaveOK(k) {
+      try {
+        var jwk = JSON.parse(new TextDecoder().decode(unb64u(String(k).replace(/^MTV1\./, ''))));
+        var datos = new TextEncoder().encode('{"t":1}');
+        return crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign'])
+          .then(function (key) { return crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, datos); })
+          .then(function (sig) { return crypto.subtle.importKey('jwk', PUBKEY, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']).then(function (pk) { return crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pk, sig, datos); }); })
+          .then(function (ok) { return !!ok; }, function () { return false; });
+      } catch (e) { return Promise.resolve(false); }
+    }
+    // al abrir: si en este teléfono quedó guardada una clave que no es la real (p.ej. por el error de antes), se borra
+    (function vetRevisar() {
+      var k = null; try { k = localStorage.getItem('libreta:vet'); } catch (e) {}
+      if (!k) return;
+      vetClaveOK(k).then(function (ok) { if (!ok) { try { localStorage.removeItem('libreta:vet'); } catch (e) {} location.reload(); } });
+    })();
     /* productores bloqueados: lista en bloqueos.json (raíz del sitio, sirve para la oficial y la de prueba). Se revisa al abrir la
        app y al volver la conexión; la última lista leída queda guardada, así que un productor bloqueado sigue bloqueado sin internet.
        No borra nada: si se lo saca de la lista, vuelve a ver todo con su misma activación. */
@@ -5284,11 +5311,11 @@
     function modoVet() {
       if (esVet()) { if (confirm('¿Salir del modo veterinario en este teléfono? Vas a necesitar tu clave para volver.')) { try { localStorage.removeItem('libreta:vet'); } catch (e) {} closeSheet(); toast('Modo veterinario desactivado'); } return; }
       var k = (prompt('Pegá tu clave de veterinario') || '').trim(); if (!k) return;
-      try { localStorage.setItem('libreta:vet', k); } catch (e) {}
-      firmar({ t: 1 }).then(function (tok) { return verificar(tok); }).then(function (ok) {
-        if (ok) { toast('Modo veterinario activo'); openSheet('Ajustes'); }
+      // se guarda recién después de comprobarla (antes se guardaba primero y un texto cualquiera quedaba como clave)
+      vetClaveOK(k).then(function (ok) {
+        if (ok) { try { localStorage.setItem('libreta:vet', k); } catch (e) {} toast('Modo veterinario activo'); openSheet('Ajustes'); }
         else { try { localStorage.removeItem('libreta:vet'); } catch (e) {} toast('Esa clave no es válida.'); }
-      }, function () { try { localStorage.removeItem('libreta:vet'); } catch (e) {} toast('Esa clave no es válida.'); });
+      });
     }
     // operario: solo Buscar y la ficha. El tipo de acceso va dentro de la firma.
     function esOperario() { return !esVet() && ACT.length > 0 && !ACT.some(function (x) { return x.r !== 'op'; }); }
