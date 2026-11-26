@@ -1572,7 +1572,7 @@
       state.secarLista = sec;
       var nSel = sec.filter(secSel).length;
       var secChips = '<div class="secrng"><div class="secrv"><span>Secar a</span><b id="secv">' + A.SECADO + '</b><span>días del parto</span></div><input type="range" id="secr" min="45" max="90" step="5" value="' + A.SECADO + '" aria-label="Días de secado antes del parto"><div class="secrt2"><span>45</span><span>60</span><span>75</span><span>90</span></div></div>';
-      var ltsChips = '<div class="secsel"><span>Menos de</span>' + SECLTS.map(function (n) { return '<button class="fchip plain" data-seclts="' + n + '" aria-pressed="' + (sLts === n) + '">' + n + '</button>'; }).join('') + '<span>litros</span></div>';
+      var ltsChips = '<div class="secrng"><div class="secrv"><span>O con menos de</span><b id="seclv">' + sLts + '</b><span>litros</span></div><input type="range" id="seclr" min="5" max="20" step="1" value="' + sLts + '" aria-label="Litros del último control"><div class="secrt2"><span>5</span><span>10</span><span>15</span><span>20</span></div></div>';
       var chips = '<div class="filters" role="group" aria-label="Ventana de tiempo">' + VENT.map(function (v) {
         return '<button class="fchip plain" data-v="' + v[0] + '" aria-pressed="' + (state.ventana === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>';
@@ -1678,7 +1678,7 @@
       return out.sort(function (x, y) { return numRp(x.a, y.a); });
     }
     // Para secar por litros: vacas preñadas en ordeñe con menos de N litros en el último control
-    var SECLTS = [8, 10, 12, 14];
+    var SECLTS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]; // perilla de 5 a 20 litros; por defecto 14
     function secLts() { if (!state.secLts) { var n = null; try { n = +localStorage.getItem('libreta:seclts'); } catch (e) {} state.secLts = SECLTS.indexOf(n) >= 0 ? n : 14; } return state.secLts; }
     function listaSecadoLts(L) {
       var out = [], hoy = today();
@@ -6717,10 +6717,12 @@
       if ((e.target.id === 'insd0' || e.target.id === 'insd1') && e.target.value) { var k = e.target.id === 'insd0' ? 'insD0' : 'insD1'; state[k] = e.target.value; setP(k.toLowerCase(), e.target.value); render(); return; }
       if (e.target.dataset && e.target.dataset.ip) { var Pp = insPrecios(), v = parseFloat(String(e.target.value).replace(',', '.')); Pp[e.target.dataset.ip] = isFinite(v) && v >= 0 ? v : null; setP('insprec', JSON.stringify(Pp)); if (state.insR) render(); return; }
       if (e.target.dataset && e.target.dataset.sf && e.target.tagName === 'SELECT') { sanInput(e.target); return; }
+      if (e.target.id === 'seclr') { var ln = Math.round(e.target.value); if (SECLTS.indexOf(ln) >= 0) { state.secLts = ln; try { localStorage.setItem('libreta:seclts', String(ln)); } catch (x) {} render(); } return; }
       if (e.target.id === 'secr') { var sn = Math.round(e.target.value); if (SECS.indexOf(sn) >= 0) { A.setSecado(sn); try { localStorage.setItem('libreta:secado', String(sn)); } catch (x) {} render(); } return; }
       if (e.target.id === 'fsec' && e.target.value) { state.fsec = e.target.value; setP('fsec', state.fsec); render(); }
     });
     document.addEventListener('input', function (e) {
+      if (e.target.id === 'seclr') { var lv = document.getElementById('seclv'); if (lv) lv.textContent = Math.round(e.target.value); return; }
       if (e.target.id === 'secr') { var sv = document.getElementById('secv'); if (sv) sv.textContent = Math.round(e.target.value); return; }
       if (e.target.dataset && e.target.dataset.sf && e.target.tagName !== 'SELECT') { sanInput(e.target); return; }
       if (e.target.dataset && e.target.dataset.vn) { var w = parseInt(e.target.value, 10); state.vtaDraft[e.target.dataset.vn] = w > 0 ? w : null; vtaCuenta(); return; }
