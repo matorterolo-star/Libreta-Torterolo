@@ -6101,7 +6101,27 @@
       var delMes = vacas.filter(function (x) { return x.ideal <= M.fin && (state.ayuOff ? x.ideal >= M.m + '-01' : true); });
       var sinDia = delMes.filter(function (x) { return !x.d; }).length;
       var otroMes = delMes.filter(function (x) { return x.d && x.d.slice(0, 7) !== M.m; }).length;
-      return { M: M, T: TM, vacas: delMes, sinDia: sinDia, otroMes: otroMes, L: L };
+      // días sugeridos (solo secado): la menor cantidad de días del mes con los que todas las vacas del mes que todavía no tienen
+      // un día dentro del rango queden secadas entre el mínimo y el máximo (p.ej. 50 a 60 días antes del parto)
+      var sug = [];
+      if (C.rango) {
+        var hoyM = M.ini, W = [];
+        delMes.forEach(function (x) {
+          if (x.d && x.n >= mn && x.n <= mx) return;
+          var a0 = A.addDays(x.P, -mx), b0 = A.addDays(x.P, -mn);
+          if (a0 < hoyM) a0 = hoyM; if (b0 > M.fin) b0 = M.fin;
+          if (a0 > b0) return;
+          W.push([a0, b0]);
+        });
+        W.sort(function (u, v) { return u[1] < v[1] ? -1 : u[1] > v[1] ? 1 : 0; });
+        var cur = null;
+        W.forEach(function (w) {
+          if (cur && w[0] <= cur.d) { cur.n++; return; }
+          cur = { d: w[1], n: 1 }; sug.push(cur);
+        });
+        sug = sug.filter(function (g) { return F.indexOf(g.d) < 0; });
+      }
+      return { M: M, T: TM, vacas: delMes, sinDia: sinDia, otroMes: otroMes, L: L, sug: sug };
     }
     function ayuMesesHTML() {
       return '<div class="ayums">' + [0, 1, 2].map(function (o) { var n = MESL[+ayuMesN(o).slice(5, 7) - 1]; return '<button class="fchip plain" data-ayum="' + o + '" aria-pressed="' + ((state.ayuOff || 0) === o) + '">' + n.charAt(0).toUpperCase() + n.slice(1) + '</button>'; }).join('') + '</div>';
@@ -6130,18 +6150,18 @@
       var MN = C.min(), MX = C.max(), col = function (n) { return n < MN ? 'r' : n > MX ? 'a' : 'v'; };
       var h = '<div class="ayu">' + volver + '<h1 class="ptitle">' + C.t + '</h1>' + ayuMesesHTML() +
         '<p class="secnote">' + D.vacas.length + (D.vacas.length === 1 ? ' preñada llega ' : ' preñadas llegan ') + C.vb + ' en ' + mesN + ' (de ' + C.min() + ' a ' + C.max() + ' días del parto). Tocá en el almanaque los días; tocá de nuevo para sacarlo.</p>' +
-        ayuCalHTML(M, function (f) { return cnt[f] != null ? { c: 'on', s: cnt[f] + ' v' } : null; });
+        ayuCalHTML(M, function (f) { if (cnt[f] != null) return { c: 'on', s: cnt[f] + ' v' }; var g = D.sug.filter(function (y) { return y.d === f; })[0]; return g ? { c: 'sug', s: g.n + ' v' } : null; });
+      if (D.sug.length) h += '<p class="cap aysugl"><i></i>Sugerido: con estos días todas quedan de ' + MN + ' a ' + MX + ' días de seca</p><button class="btn ayusug" data-a="ayusug">Usar los días sugeridos</button>';
       if (D.otroMes || D.sinDia) h += '<p class="cap ayinfo">' + [D.otroMes ? D.otroMes + ' ya ' + (D.otroMes === 1 ? 'quedó' : 'quedaron') + ' en una tanda de otro mes' : '', D.sinDia ? '<b>' + D.sinDia + ' sin día todavía</b>' : ''].filter(Boolean).join(' · ') + '</p>';
       if (!D.T.length) h += '<p class="hint">' + (D.vacas.length ? 'Marcá en el almanaque los días y la app reparte las vacas.' : 'No hay preñadas que lleguen ' + C.vb + ' en ' + mesN + '.') + '</p>';
       D.T.forEach(function (t) {
         var ns = t.v.map(function (x) { return x.n; }), mn = Math.min.apply(null, ns), mx = Math.max.apply(null, ns), nr = ns.filter(function (n) { return n < MN; }).length;
-        h += '<section class="card aytan' + (t.d < today() ? ' hecha' : '') + '"><div class="ayth"><h2>' + ayuDia(t.d) + (t.d < today() ? ' <small class="ayhecha">ya pasó</small>' : '') + '</h2><span class="count">' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '</span></div>' +
+        h += '<section class="card aytan' + (t.d < today() ? ' hecha' : '') + '">' + (t.v.length ? '<button class="shic" data-a="ayuenv" data-d="' + t.d + '" aria-label="Enviar por WhatsApp" title="Enviar por WhatsApp"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') + '<div class="ayth"><h2>' + ayuDia(t.d) + (t.d < today() ? ' <small class="ayhecha">ya pasó</small>' : '') + '</h2><span class="count">' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '</span></div>' +
           (t.v.length ? '<p class="cap">' + (mn === mx ? mn : mn + ' a ' + mx) + ' días ' + C.u + (nr ? ' · <b class="ayr">' + nr + ' con menos de ' + MN + '</b>' : '') + '</p><div class="aychips">' +
             t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return '<button class="aych ' + col(x.n) + (pt ? ' alr' : '') + '" data-rp="' + esc(x.a.rp) + '"><b>' + esc(x.a.rp) + '</b><small>' + (x.a.cat === 'vaquillona' ? 'vaq · ' : '') + x.n + ' d</small></button>'; }).join('') + '</div>'
             : '<p class="cap">Ningún animal para este día.</p>') + '</section>';
       });
-      if (D.T.length) h += '<p class="cap ayley"><i class="v"></i>' + MN + ' a ' + MX + ' días <i class="a"></i>más de ' + MX + ' <i class="r"></i>menos de ' + MN + (k === 'secar' ? ' <i class="x"></i>preñada + celo o servicio' : '') + '</p>' +
-        '<button class="btn share" data-a="ayuenv">' + AYU_ENV + 'Enviar por WhatsApp</button>';
+      if (D.T.length) h += '<p class="cap ayley"><i class="v"></i>' + MN + ' a ' + MX + ' días <i class="a"></i>más de ' + MX + ' <i class="r"></i>menos de ' + MN + (k === 'secar' ? ' <i class="x"></i>preñada + celo o servicio' : '') + '</p>';
       return h + '</div>';
     }
     function ayuToggle(f) {
@@ -6150,12 +6170,18 @@
       if (i >= 0) F.splice(i, 1); else F.push(f);
       setP(C.k + ':' + M.m, JSON.stringify(F.sort())); render();
     }
-    function ayuEnviar() {
+    function ayuUsarSug() {
+      var C = AYU[state.ayu]; if (!C) return;
+      var M = ayuMes(), F = ayuFechas(C.k, M.m);
+      ayuDatos(C).sug.forEach(function (g) { if (F.indexOf(g.d) < 0) F.push(g.d); });
+      setP(C.k + ':' + M.m, JSON.stringify(F.sort())); render();
+    }
+    function ayuEnviar(dia) {
       var k = state.ayu, txt;
       {
         var C = AYU[k]; if (!C) return; var D = ayuDatos(C);
         txt = '*' + C.t + (PERFIL.nombre ? ' — ' + PERFIL.nombre : '') + '*\n' + 'De ' + C.min() + ' a ' + C.max() + ' días del parto\n' +
-          D.T.map(function (t) {
+          D.T.filter(function (t) { return !dia || t.d === dia; }).map(function (t) {
             return '\n*' + ayuDia(t.d) + '* · ' + t.v.length + (t.v.length === 1 ? ' animal' : ' animales') + '\n' +
               t.v.map(function (x) { var pt = k === 'secar' && postTacto(x.a); return x.a.rp + (x.a.cat === 'vaquillona' ? ' (vaq.)' : '') + ' · ' + x.n + ' días ' + C.u + (x.n < C.min() ? ' ⚠' : '') + (pt ? ' · ⚠ ' + (pt[1] === 'S' ? 'preñada + servicio' : 'preñada + celo') : ''); }).join('\n');
           }).join('\n');
@@ -6620,7 +6646,8 @@
       else if (a === 'basein') { closeSheet(); $('#baseFile').click(); }
       else if (a === 'ayu') { state.ayu = 'menu'; render(); window.scrollTo(0, 0); }
       else if (a === 'ayucerrar') { state.ayu = state.ayu && state.ayu !== 'menu' ? 'menu' : false; render(); window.scrollTo(0, 0); }
-      else if (a === 'ayuenv') ayuEnviar();
+      else if (a === 'ayuenv') ayuEnviar(b.dataset.d);
+      else if (a === 'ayusug') ayuUsarSug();
       else if (a === 'voy') { state.voy = true; state.voyLista = null; render(); window.scrollTo(0, 0); }
       else if (a === 'voycerrar') { if (state.voyLista) state.voyLista = null; else state.voy = false; render(); window.scrollTo(0, 0); }
       else if (a === 'voyleche') { state.voy = false; state.voyLista = null; setTab('leche'); }
