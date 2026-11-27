@@ -3957,7 +3957,7 @@
       w.setAttribute('data-shhoja', '1');
       w.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;' + (alto ? 'min-height:' + alto + 'px;' : '') + 'box-sizing:border-box;padding:14px;background:#F0F2F3;color-scheme:light;font-family:var(--sans);display:flex;flex-direction:column;' +
         '--bg:#F0F2F3;--surface:#FFFFFF;--ink:#1F2427;--muted:#5C656C;--line:#D9DDE0;--navy:#2B3034;--on-navy:#FFFFFF;--gold:#2EC4B6;--link:#13877C;--prenada:#16794A;--servida:#6B3FA0;--vacia:#B3261E;--ciclando:#2457A6;--apta:#8A6510;--sin:#5C656C;--descarte:#B3261E;--bar:#9FB0CC;--bar-last:#12274A;--cl1:#C9A227;--cl2:#12274A;--clm:#0E7C86;--medal:#C9A227';
-      w.innerHTML = '<div style="background:#2B3034;color:#fff;border-radius:14px;padding:12px 16px;margin-bottom:12px;border-bottom:4px solid #2EC4B6"><div style="font-size:12px;letter-spacing:.06em;color:#3DD6C9;font-weight:700">DR. MAURO TORTEROLO</div><div style="font-size:21px;font-weight:800;line-height:1.2">' + esc(conNom ? (PERFIL.nombre || 'Tambo') : 'Tambo') + '</div><div style="font-size:13px;opacity:.85">Datos al ' + A.fmt(DB.fecha || today()) + '</div></div>' +
+      w.innerHTML = '<div style="background:#2B3034;color:#fff;border-radius:14px;padding:12px 16px;margin-bottom:12px;border-bottom:4px solid #2EC4B6"><div style="font-size:12px;letter-spacing:.06em;color:#3DD6C9;font-weight:700">DR. MAURO TORTEROLO</div><div style="font-size:21px;font-weight:800;line-height:1.2">' + esc(conNom ? ((SHX ? SHX.nombre : PERFIL.nombre) || 'Tambo') : 'Tambo') + '</div><div style="font-size:13px;opacity:.85">Datos al ' + A.fmt((SHX ? SHX.fecha : DB.fecha) || today()) + '</div></div>' +
         '<div class="shcard" style="background:#fff;border:1px solid #D9DDE0;border-radius:16px;padding:14px 16px;flex:1"><div style="font-size:20px;font-weight:800;color:#1F2427">' + esc(titulo) + '</div>' +
         (ctx ? '<div style="font-size:14px;color:#5C656C;font-weight:600;margin-top:2px">' + esc(ctx) + '</div>' : '') +
         (clave ? '<div style="margin:8px 0 0;font-size:14px;font-weight:400;color:#1F2427;line-height:1.45">' + clave.split('\n').map(esc).join('<br>') + '</div>' : '') +
@@ -5675,10 +5675,41 @@
         var VZ = vaqZafra(y - 1, ref);
         if (VZ.nVaq >= 10) r.vaq = { c1: VZ.s1ok + VZ.s1mal >= 10 ? VZ.s1ok / (VZ.s1ok + VZ.s1mal) * 100 : null, pren: VZ.nVaq - VZ.baja ? VZ.pren / (VZ.nVaq - VZ.baja) * 100 : null, e1s: VZ.edadMed };
       } catch (e) {}
+      // partos de multíparas (y de primíparas) sobre la vaca masa promedio, por ejercicio julio–junio cerrado: este y el anterior
+      try { r.ej = [pobEjer(0), pobEjer(1)]; } catch (e) {}
       // mastitis: la misma cuenta que la tarjeta de Leche (casos y vacas tratadas en los últimos 12 meses)
       try { POBX = {}; mastitisHTML(); if (POBX.mast) r.mast = POBX.mast; } catch (e) {} finally { POBX = null; }
     }
     var POBX = null;
+    // vaca masa (ordeñe + secas) promedio de un mes: historia larga del respaldo (vovsH) si está; si no, partos, secados y bajas
+    function vmMes(key) {
+      var H = DB.vovsH;
+      if (H && H.u && H.desde) {
+        var i = (+key.slice(0, 4) - +H.desde.slice(0, 4)) * 12 + (+key.slice(5, 7) - +H.desde.slice(5, 7)), s = null;
+        if (i >= 0) Object.keys(H.u).forEach(function (u) {
+          if (DB.sel && DB.sel.length && DB.sel.indexOf(+u) < 0 && DB.sel.indexOf(u) < 0) return;
+          var x = H.u[u][i]; if (x && x[0] != null) s = (s || 0) + x[0] + (x[1] || 0);
+        });
+        if (s) return s;
+      }
+      if (DB.desdeHist && key + '-01' < DB.desdeHist) return null; // sin historia para ese mes
+      return vovsMeses([{ key: key }]).vm[0];
+    }
+    // ejercicio julio–junio cerrado (atras = 0 el último, 1 el anterior): partos sin abortos de multíparas y primíparas
+    // en % de la vaca masa promedio del ejercicio (la misma base que la tarjeta Partos)
+    function pobEjer(atras) {
+      var ref = DB.fecha || today(), yF = +ref.slice(0, 4) - (+ref.slice(5, 7) < 7 ? 1 : 0) - atras, M = [];
+      for (var i = 0; i < 12; i++) { var m = 7 + i, y = yF - 1; if (m > 12) { m -= 12; y++; } M.push(y + '-' + pad2(m)); }
+      var d0 = M[0] + '-01', d1 = M[11] + '-30';
+      var vm = M.map(vmMes); if (vm.some(function (x) { return !x; })) return null;
+      var prom = vm.reduce(function (a, b) { return a + b; }, 0) / 12, nM = 0, nP = 0;
+      infLista().forEach(function (x) { (x.h.pa || []).forEach(function (p) {
+        if (p[0] < d0 || p[0] > d1 || /^A/.test(p[2] || '') || !enSel(unidadEn(x, p[0]))) return;
+        if (p[1] === 1) nP++; else nM++;
+      }); });
+      if (prom < 20) return null;
+      return { lbl: String(yF - 1).slice(2) + '/' + String(yF).slice(2), vm: prom, nM: nM, nP: nP, pm: nM / prom * 100, pp: nP / prom * 100 };
+    }
     // unidades del tambo con al menos 20 vacas (en ordeñe y secas): cada una va como fila propia en la población.
     // Las unidades sin vacas (recría, campo) no tienen fila; un tambo de una sola unidad sigue siendo una fila.
     function pobUnidades(t, o) {
@@ -5734,6 +5765,10 @@
       { k: 'iep', g: 'Rodeo', t: 'Intervalo entre partos', u: 'días', alto: false, d: 0, val: function (f) { return f.vida && f.vida.iep; }, nota: 'Días entre partos de los partos de los últimos 2 años (Línea de vida).' },
       { k: 'seca', g: 'Rodeo', t: 'Días de seca', u: 'días', alto: null, d: 0, neutro: true, val: function (f) { return f.vida && f.vida.seca; }, nota: 'Promedio del cierre de la lactancia al parto siguiente, partos de los últimos 2 años. Lo ideal es 50 a 60.' },
       { k: 'secaOk', g: 'Rodeo', t: 'Secas con 50 a 60 días', u: '%', alto: true, d: 0, val: function (f) { return f.vida && f.vida.secaOk; }, nota: '% de los períodos secos en el óptimo (50 a 60 días).' },
+      { k: 'ejM', g: 'Rodeo', t: 'Partos de multíparas, último ejercicio', u: '%', alto: true, d: 0, sub: function (f) { return f.ej && f.ej[0] ? 'Ejercicio ' + f.ej[0].lbl + ' · ' + f.ej[0].nM + ' partos' : ''; }, val: function (f) { return f.ej && f.ej[0] ? f.ej[0].pm : null; }, nota: 'Partos de vacas (2ª lactancia o más, sin abortos) del último ejercicio cerrado (julio a junio) en % de la vaca masa promedio (ordeñe + secas) de ese ejercicio.' },
+      { k: 'ejMA', g: 'Rodeo', t: 'Partos de multíparas, ejercicio anterior', u: '%', alto: true, d: 0, sub: function (f) { return f.ej && f.ej[1] ? 'Ejercicio ' + f.ej[1].lbl + ' · ' + f.ej[1].nM + ' partos' : ''; }, val: function (f) { return f.ej && f.ej[1] ? f.ej[1].pm : null; }, nota: 'La misma cuenta en el ejercicio anterior.' },
+      { k: 'ejMD', g: 'Rodeo', t: 'Partos de multíparas, evolución', u: 'puntos', alto: true, d: 0, val: function (f) { return f.ej && f.ej[0] && f.ej[1] ? f.ej[0].pm - f.ej[1].pm : null; }, nota: 'Último ejercicio menos el anterior, en puntos de % de la vaca masa.' },
+      { k: 'ejP', g: 'Rodeo', t: 'Partos de primíparas, último ejercicio', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.ej && f.ej[0] ? f.ej[0].pp : null; }, nota: 'Partos de vaquillonas del último ejercicio en % de la vaca masa promedio: la reposición que entró.' },
       { k: 'salT', g: 'Rodeo', t: 'Salidas tempranas', u: '%', alto: false, d: 1, val: function (f) { return f.salT; }, nota: 'Partos de los últimos 12 meses (con 60 días de seguimiento) de vacas vendidas o muertas antes de los 60 días de paridas. Hasta 5% bien, más de 8% problema.' },
       { k: 'salEdad', g: 'Rodeo', t: 'Edad a la salida del tambo', u: 'años', alto: true, d: 1, val: function (f) { return f.vida && f.vida.salEdad; }, nota: 'Edad promedio de las vacas vendidas o muertas en los últimos 2 años.' },
       { k: 'salLac', g: 'Rodeo', t: 'Lactancias a la salida', u: '', alto: true, d: 1, val: function (f) { return f.vida && f.vida.salLac; }, nota: 'Lactancias promedio de las vacas que salieron del tambo en los últimos 2 años.' },
@@ -5836,18 +5871,61 @@
         }).join('') +
         '<p class="cap">Prom.: promedio simple de los tambos o unidades (cada uno pesa igual). Med.: mediana (la mitad está por encima y la mitad por debajo). 25% mejor: el valor a partir del cual está el cuarto de mejores resultados; 25% peor: el límite del cuarto de peores. Debajo de cada indicador, cuántos tambos o unidades tienen dato, cuántos no entran por tener toro en el rodeo (marcados por el veterinario) y cuántos tienen un valor atípico (muy alejado del resto; se cuentan igual, pero conviene revisarlos). En las barras, la franja oscura va del 25% al 75% de los tambos, la raya es la mediana y el punto el promedio. Los tambos con varias unidades cuentan cada unidad con vacas por separado. Tasas de 21 días: solo filas con 30 aptas o más (concepción: 20 servicios con resultado).</p><p class="ifirma">Dr. Mauro Torterolo</p>';
     }
+    // un tambo (o unidad) frente a la población: cada indicador con su semáforo (25% mejor, medio, 25% peor) y las referencias
+    var SHX = null; // encabezado de la imagen compartida cuando el tambo no es el abierto
+    function pobTamboHTML(F) {
+      if (!document.getElementById('tvCss')) {
+        var st = document.createElement('style'); st.id = 'tvCss';
+        st.textContent = '.tvtbl{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13.5px}.tvtbl th{font-size:11.5px;font-weight:600;color:var(--muted);text-align:right;padding:0 2px 6px;line-height:1.2}.tvtbl th:nth-child(2){text-align:center}.tvtbl td{border-top:1px solid var(--line);padding:8px 2px;text-align:right;vertical-align:middle}.tvtbl td:first-child{text-align:left;line-height:1.25}.tvtbl td:nth-child(2){text-align:center}.tvtbl td small{display:block;font-size:11px;color:var(--muted);font-weight:500}' +
+          '.tvp{display:inline-block;padding:3px 9px;border-radius:99px;font-weight:700;white-space:nowrap}.tvp.ok{background:#E3F1E8;color:#16794A}.tvp.med{background:#FBF0D9;color:#8A6510}.tvp.mal{background:#F8E1DF;color:#B3261E}.tvp.neu{background:#ECEFF1;color:#3A4247}' +
+          '@media (prefers-color-scheme:dark){.tvp.ok{background:#173A27;color:#8FD9AE}.tvp.med{background:#3D3014;color:#F0C66B}.tvp.mal{background:#45201D;color:#F2A49C}.tvp.neu{background:#2C3236;color:#C9D0D4}}' +
+          '[data-shhoja] .tvp.ok{background:#E3F1E8;color:#16794A}[data-shhoja] .tvp.med{background:#FBF0D9;color:#8A6510}[data-shhoja] .tvp.mal{background:#F8E1DF;color:#B3261E}[data-shhoja] .tvp.neu{background:#ECEFF1;color:#3A4247}' +
+          '.tvleg{display:flex;flex-wrap:wrap;gap:6px 12px;margin:10px 0 0;font-size:12px;color:var(--muted)}.tvleg .tvp{padding:1px 8px;font-size:11px}@media print{.tvcard{break-inside:avoid}.tvp{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+        document.head.appendChild(st);
+      }
+      var L = F.slice().sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); });
+      var k = state.pobTb, f = L.filter(function (x) { return pobKey(x) === k; })[0] || L[0];
+      if (!f) return '<section class="card"><h2>Tambo en la población</h2><p class="hint">No hay tambos con datos.</p></section>';
+      var ctrl = '<section class="card noprint"><label class="secfecha">Tambo <select id="pobTb">' + L.map(function (x) { var q = pobKey(x); return '<option value="' + esc(q) + '"' + (x === f ? ' selected' : '') + '>' + esc(x.nombre) + '</option>'; }).join('') + '</select></label></section>';
+      var toro = pobToro()[pobKey(f)], grupos = [];
+      POB_IND.forEach(function (i) { if (grupos.indexOf(i.g) < 0) grupos.push(i.g); });
+      var cuenta = { ok: 0, mal: 0 };
+      var cards = grupos.map(function (g) {
+        var filas = POB_IND.filter(function (i) { return i.g === g; }).map(function (ind) {
+          var S = pobStats(F, ind); if (S.n < 4) return '';
+          var x = ind.val(f), sinT = ind.sinToro && toro;
+          var mej = ind.alto ? S.p75 : S.p25, peo = ind.alto ? S.p25 : S.p75, c = 'neu';
+          if (x != null && !isNaN(x) && !ind.neutro && !sinT) {
+            var bien = ind.alto ? x >= mej : x <= mej, malx = ind.alto ? x <= peo : x >= peo;
+            c = bien ? 'ok' : malx ? 'mal' : 'med'; if (bien) cuenta.ok++; else if (malx) cuenta.mal++;
+          }
+          var val = x == null || isNaN(x) ? '–' : '<span class="tvp ' + c + '">' + pobFmt(x, ind).replace(/ (días|meses|años|L|puntos)$/, '') + '</span>';
+          var sub = ind.sub ? ind.sub(f) : '';
+          return '<tr><td>' + esc(pobTit(ind)) + (sub ? '<small>' + esc(sub) + '</small>' : '') + (sinT ? '<small>con toro: no se compara</small>' : '') + '</td><td>' + val + '</td><td>' + (ind.neutro ? '–' : pobNum(mej, ind)) + '</td><td>' + pobNum(S.prom, ind) + '</td><td>' + (ind.neutro ? '–' : pobNum(peo, ind)) + '</td></tr>';
+        }).join('');
+        if (!filas) return '';
+        return '<section class="card tvcard"><h2>' + esc(g) + '</h2><table class="tvtbl"><colgroup><col style="width:36%"><col style="width:19%"><col style="width:15%"><col style="width:14%"><col style="width:16%"></colgroup>' +
+          '<thead><tr><th></th><th>Tambo</th><th>25% mejor</th><th>Prom.</th><th>25% peor</th></tr></thead><tbody>' + filas + '</tbody></table>' +
+          '<div class="tvleg"><span><span class="tvp ok">verde</span> 25% mejor</span><span><span class="tvp med">amarillo</span> en el medio</span><span><span class="tvp mal">rojo</span> 25% peor</span></div></section>';
+      }).join('');
+      var ids = {}; F.forEach(function (x) { ids[x.id] = 1; });
+      return ctrl + '<section class="card rkhead"><h2>' + esc(f.nombre) + ' en la población</h2><p class="cap">' + Object.keys(ids).length + ' tambos (' + F.length + ' tambos o unidades) · datos del tambo al ' + A.fmt(f.ref || today()) + ' · ' + A.fmt(today()) + '</p>' +
+        '<p style="margin:6px 0 0"><b>' + cuenta.ok + '</b> indicadores en el 25% mejor y <b>' + cuenta.mal + '</b> en el 25% peor.</p></section>' + cards +
+        '<p class="cap">25% mejor: el valor desde el cual está el cuarto de tambos con mejor resultado; 25% peor: el límite del cuarto con peor resultado; Prom.: promedio simple de los tambos o unidades con dato (cada uno pesa igual). En los indicadores donde lo mejor es un número bajo (días, meses, mastitis, salidas), el 25% mejor es el número más chico. En gris, indicadores sin "mejor" o "peor" (tamaño, días de seca promedio, primíparas). Solo indicadores con al menos 4 tambos con dato.</p><p class="ifirma">Dr. Mauro Torterolo</p>';
+    }
     function pdfPob() {
-      var t = document.title; document.title = (state.pobVista === 'gen' ? 'Indicadores de la poblacion ' : 'Ranking de la poblacion ') + today();
+      var t = document.title; document.title = (state.pobVista === 'gen' ? 'Indicadores de la poblacion ' : state.pobVista === 'tambo' ? 'Tambo en la poblacion ' : 'Ranking de la poblacion ') + today();
       setTimeout(function () { window.print(); setTimeout(function () { document.title = t; }, 500); }, 50);
     }
     function pobHTML() {
       var vista = state.pobVista || 'tabla';
-      var bar = '<div class="infbar"><button class="btn" data-a="pobcerrar">Volver</button><div class="filters">' + [['tabla', 'Tablas'], ['rank', 'Ranking'], ['gen', 'Indicadores']].map(function (c) { return '<button class="fchip" data-a="pobvista" data-pv="' + c[0] + '" aria-pressed="' + (vista === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div>' +
+      var bar = '<div class="infbar"><button class="btn" data-a="pobcerrar">Volver</button><div class="filters">' + [['tabla', 'Tablas'], ['rank', 'Ranking'], ['gen', 'Indicadores'], ['tambo', 'Tambo']].map(function (c) { return '<button class="fchip" data-a="pobvista" data-pv="' + c[0] + '" aria-pressed="' + (vista === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div>' +
         (vista === 'tabla' ? '<button class="btn" data-a="pobcalc">Recalcular</button>' : '<button class="btn primary" data-a="pobpdf">PDF</button>') + '</div>';
       if (!POB || POB.cargando) return bar + '<section class="card"><h2>Población de tambos</h2><p class="hint">Calculando… ' + esc(POB && POB.prog || '') + '</p></section>';
       var F = POB.filas.filter(function (f) { return !f.sin && !f.error; }), sin = POB.filas.filter(function (f) { return f.sin || f.error; });
       if (vista === 'rank') return '<div class="pob">' + bar + pobRankHTML(F) + '</div>';
       if (vista === 'gen') return '<div class="pob">' + bar + pobGenHTML(F) + '</div>';
+      if (vista === 'tambo') return '<div class="pob">' + bar + pobTamboHTML(F) + '</div>';
       var p = function (n, d) { return d ? Math.round(n / d * 100) + '%' : '–'; }, v = function (x, d) { return x == null || isNaN(x) ? '–' : nf(x, d || 0); };
       var hoy = today(), viejo = function (f) { return A.diffDays(hoy, f.ref) > 60; };
       var Tt = { aptas: 0, serv: 0, pren: 0, sOk: 0, sMal: 0 }, TAt = { aptas: 0, pren: 0 }, vac = 0;
@@ -6633,7 +6711,13 @@
         return '<button class="nb" data-t="' + n[0] + '" aria-current="' + (!state.rp && state.tab === n[0] ? 'page' : 'false') + '"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">' + n[2] + '</svg><span>' + n[1] + '</span></button>';
       }).join('') + '</div>';
       document.body.classList.toggle('ancho', !!(state.pobl && esVet()));
-      if (state.pobl && esVet()) { main.innerHTML = pobHTML(); return; }
+      SHX = null;
+      if (state.pobl && esVet()) {
+        main.innerHTML = pobHTML();
+        // el tambo en la población: cada tarjeta se comparte como imagen, con el nombre del tambo elegido
+        if (state.pobVista === 'tambo' && POB && POB.filas) { var fx = POB.filas.filter(function (x) { return pobKey(x) === state.pobTb; })[0] || POB.filas.filter(function (x) { return !x.sin && !x.error; }).sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); })[0]; if (fx) SHX = { nombre: fx.nombre, fecha: fx.ref }; vetCompartir(main); }
+        return;
+      }
       if (state.informe && esVet()) { main.innerHTML = informeHTML(); return; }
       if (state.rp) {
         var a = byRp(state.rp);
@@ -6846,6 +6930,7 @@
       if (e.target.id === 'simDesc') { state.simDesc = e.target.checked; setP('simdesc', state.simDesc ? '1' : ''); render(); return; }
       if (e.target.id === 'pobSel') { state.pobModo = e.target.value; render(); return; }
       if (e.target.id === 'pobGr') { state.pobGr = e.target.value; render(); return; }
+      if (e.target.id === 'pobTb') { state.pobTb = e.target.value; render(); return; }
       if (e.target.classList && e.target.classList.contains('pobToro')) { pobToroSet(e.target.dataset.toro, e.target.checked); state.pobToroAb = true; render(); return; }
       if (e.target.id === 'finZaf' && e.target.value) { setP('finzaf', e.target.value.slice(5)); render(); return; }
       if ((e.target.id === 'cpmin' || e.target.id === 'cpmax') && e.target.value) { var cv = parseInt(e.target.value, 10); if (cv > 0) { setP(e.target.id, String(cv)); render(); } }
