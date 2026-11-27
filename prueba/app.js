@@ -6278,6 +6278,62 @@
         '<svg class="mchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Vacas en ordeñe por tercio de lactancia y días en leche promedio, mes a mes">' + sv + '</svg>' +
         '<p class="cap">Vacas en ordeñe el día 15 de cada mes de los últimos 12, sumando los ' + nT + ' tambos, según sus partos, secados y bajas (no hace falta control lechero). Sin secado anotado, la vaca se seca ' + A.SECADO + ' días antes del parto siguiente. Va de la mano con la curva de partos: después del pico de partos de otoño sube el primer tercio y bajan los días en leche.</p></section>';
     }
+    // ===== Mensajes: ideas fuerza de la población para productores y técnicos (formato A: comparación de grupos con barras;
+    // formato B: número grande). Son asociaciones en la población, no causas: se dice con cuántos tambos se calculó cada una.
+    function pobMensajesHTML(F) {
+      if (!document.getElementById('msjCss')) {
+        var st = document.createElement('style'); st.id = 'msjCss';
+        st.textContent = '.msj{padding:16px 18px}.msj .mf{padding-right:40px}.msj.b{padding-right:56px}.msj.b .mf{padding-right:0}.msj h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 4px;color:var(--mc)}.msj .mf{font-size:18px;font-weight:800;line-height:1.35;margin:0 0 12px}.msj .mr{margin:0 0 9px;font-size:13px}.msj .mr div{display:flex;justify-content:space-between;gap:8px;margin-bottom:3px}.msj .mr span{color:var(--muted)}.msj .mb{height:13px;background:var(--bg);border-radius:7px;overflow:hidden}.msj .mb i{display:block;height:13px;border-radius:7px;background:var(--mc);-webkit-print-color-adjust:exact;print-color-adjust:exact}.msj .mb i.g{background:#B4B2A9}.msj .mki{margin:12px 0 4px;font-size:12.5px;font-weight:700}' +
+          '.msj.b{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}.msj.b .mn{text-align:center;min-width:96px}.msj.b .mn b{display:block;font-size:44px;font-weight:800;line-height:1;color:var(--mc)}.msj.b .mn small{font-size:12px;color:var(--muted)}.msj.b .mf{font-size:17px;margin:0 0 4px}.msj.b .md{font-size:13px;color:var(--muted);margin:0}.msj .mp{grid-column:1/-1;font-size:11.5px;color:var(--muted);margin:10px 0 0}.msjg{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}.msjg .card{margin:0}@media print{.msj{break-inside:avoid}}';
+        document.head.appendChild(st);
+      }
+      var ind = function (k) { return POB_IND.filter(function (i) { return i.k === k; })[0]; };
+      var TT = pobToro(), sinT = function (f) { return !TT[pobKey(f)] && !f.toroAuto; };
+      var val = function (k, f) { var I = ind(k); var x = I ? I.val(f) : null; if (x == null || isNaN(x)) return null; if (I.sinToro && !sinT(f)) return null; if (!I.cero && Math.abs(x) < 0.05) return null; return x; };
+      var avg = function (L, k) { var v = L.map(function (f) { return val(k, f); }).filter(function (x) { return x != null; }); return v.length >= 4 ? { m: v.reduce(function (a, b) { return a + b; }, 0) / v.length, n: v.length } : null; };
+      var fm = function (x, k) { return pobFmt(x, ind(k)); }, nT = F.length, out = [], pie = function (t) { return '<p class="mp">' + t + ' · ' + nT + ' tambos de la población · Dr. Mauro Torterolo</p>'; };
+      var barras = function (k, g1, l1, g2, l2) {
+        var a = avg(g1, k), b = avg(g2, k); if (!a || !b) return null;
+        var mx = Math.max(a.m, b.m) || 1, I = ind(k);
+        return { a: a, b: b, h: '<p class="mki">' + esc(I.t) + '</p><div class="mr"><div><span>' + l1 + ' · ' + a.n + ' tambos</span><b>' + fm(a.m, k) + '</b></div><div class="mb"><i style="width:' + (a.m / mx * 100).toFixed(1) + '%"></i></div></div><div class="mr"><div><span>' + l2 + ' · ' + b.n + ' tambos</span><b>' + fm(b.m, k) + '</b></div><div class="mb"><i class="g" style="width:' + (b.m / mx * 100).toFixed(1) + '%"></i></div></div>' };
+      };
+      var cardA = function (tag, col, frase, cuerpo, nota) { return '<section class="card msj" style="--mc:' + col + '"><h2>' + tag + '</h2><p class="mf">' + frase + '</p>' + cuerpo + pie(nota) + '</section>'; };
+      var cardB = function (tag, col, num, sub, frase, det, nota) { return '<section class="card msj b" style="--mc:' + col + '"><div class="mn"><b>' + num + '</b><small>' + sub + '</small></div><div><h2>' + tag + '</h2><p class="mf">' + frase + '</p>' + (det ? '<p class="md">' + det + '</p>' : '') + '</div>' + pie(nota) + '</section>'; };
+      var dif = function (a, b, d) { return nf(Math.abs(a - b), d || 0); };
+      // 1) tactar seguido
+      var t1 = F.filter(function (f) { return f.reg && f.reg.tInt != null && f.reg.tInt <= 35; }), t2 = F.filter(function (f) { return f.reg && f.reg.tInt != null && f.reg.tInt > 60; });
+      var b1 = barras('pren', t1, 'Tactan cada 35 días o menos', t2, 'Tactan cada más de 60 días'), b1b = barras('vac150', t1, 'Tactan cada 35 días o menos', t2, 'Tactan cada más de 60 días');
+      if (b1) out.push(cardA('Tactar seguido', '#185FA5', 'Los tambos que tactan cada 35 días o menos preñan ' + (b1.a.m >= b1.b.m ? dif(b1.a.m, b1.b.m) + ' puntos más' : dif(b1.a.m, b1.b.m) + ' puntos menos') + ' cada 21 días' + (b1b ? ' y tienen ' + (b1b.a.m <= b1b.b.m ? dif(b1b.a.m, b1b.b.m) + ' puntos menos' : dif(b1b.a.m, b1b.b.m) + ' puntos más') + ' de vacas vacías con más de 150 días' : '') + '.', b1.h + (b1b ? b1b.h : ''), 'Frecuencia de tacto: mediana de los días entre visitas de cada tambo, últimos 12 meses'));
+      // 2) preñar temprano: 25% con mejor tasa de preñez contra el 25% peor
+      var S = pobStats(F, ind('pren'));
+      if (S.n >= 12) {
+        var q = Math.floor(S.n / 4), top = S.L.slice(0, q).map(function (z) { return z.f; }), bot = S.L.slice(-q).map(function (z) { return z.f; });
+        var c = [['iep'], ['p12V'], ['delP'], ['lv12'], ['vac150']].map(function (k) { return barras(k[0], top, '25% con mejor tasa de preñez', bot, '25% con peor tasa de preñez'); }).filter(Boolean);
+        var ie = barras('iep', top, '', bot, '');
+        if (c.length) out.push(cardA('Preñar temprano', '#185FA5', 'El 25% de los tambos que mejor preña tiene ' + (ie ? dif(ie.a.m, ie.b.m) + ' días menos de intervalo entre partos' : 'mejores resultados') + ' que el 25% que peor preña' + (function () { var pv2 = barras('p12V', top, '', bot, ''); return pv2 && pv2.a.m > pv2.b.m ? ', y ' + dif(pv2.a.m, pv2.b.m) + ' partos de vacas más cada 100 vacas en el año' : ''; })() + '.', c.map(function (x) { return x.h; }).join(''), 'Grupos de ' + q + ' tambos según la tasa de preñez cada 21 días (temporada o 12 meses), sin tambos con toro'));
+      }
+      // 3) lo que se pierde en el camino
+      var PT = { n: 0, par: 0, ab: 0, perd: 0, ven: 0, mue: 0, sin: 0 }, nPT = 0, lbl = '';
+      F.forEach(function (f) { if (!f.pp) return; nPT++; lbl = f.pp.lbl; Object.keys(PT).forEach(function (k) { PT[k] += f.pp[k]; }); });
+      if (PT.n >= 100) { var no = PT.n - PT.par, c100 = function (x) { return nf(x / PT.n * 100, 0); };
+        out.push(cardB('Lo que se pierde en el camino', '#993C1D', c100(no), 'de cada 100', 'preñeces confirmadas por tacto no llegan a parir', c100(PT.ab) + ' abortos · ' + c100(PT.perd) + ' vacías después del tacto · ' + c100(PT.ven + PT.mue) + ' vendidas o muertas preñadas · ' + c100(PT.sin) + ' sin registro del parto', nf(PT.n) + ' preñeces con parto esperado en el ejercicio ' + lbl + ', ' + nPT + ' tambos')); }
+      // 4) recría
+      var r1 = F.filter(function (f) { var x = val('e1p', f); return x != null && x <= 24.5; }), r2 = F.filter(function (f) { var x = val('e1p', f); return x != null && x > 30; });
+      var be = barras('e1p', r1, 'Primer parto a los 24 meses o menos', r2, 'Primer parto con más de 30 meses');
+      if (be) out.push(cardA('La recría cuesta tiempo', '#534AB7', 'En ' + be.b.n + ' tambos las vaquillonas paren con más de 30 meses: ' + dif(be.b.m, be.a.m, 1) + ' meses más de recría por vaquillona que en los que paren a los 24 meses, y ' + nf((be.b.m / be.a.m - 1) * 100, 0) + '% más vaquillonas en el campo para reponer lo mismo.', be.h, 'Vaquillonas que parieron en los últimos 2 años'));
+      // 5) reposición
+      var rep2 = F.filter(function (f) { return val('repo', f) != null && val('p12Q', f) != null; }), ach = rep2.filter(function (f) { return val('p12Q', f) < val('repo', f); });
+      if (rep2.length >= 10) out.push(cardB('¿Alcanza la reposición?', '#993C1D', nf(ach.length / rep2.length * 100, 0) + '%', 'de los tambos', 'tuvieron menos vaquillonas paridas que vacas que salieron en el último año', 'Promedio: salieron ' + fm(avg(rep2, 'repo').m, 'repo') + ' de la vaca masa y entraron ' + fm(avg(rep2, 'p12Q').m, 'p12Q') + ' como vaquillonas paridas.', 'Últimos 12 meses, ' + rep2.length + ' tambos con dato'));
+      // 6) salidas tempranas
+      var sa = avg(F, 'salT'); if (sa) out.push(cardB('Salen al principio de la lactancia', '#993C1D', nf(sa.m, 1), 'de cada 100', 'vacas que paren se van del tambo antes de los 60 días', 'Referencia: hasta 5 está bien; más de 8 es un problema del período de transición.', 'Partos de 12 meses con 60 días de seguimiento, ' + sa.n + ' tambos'));
+      // 7) registrar
+      var c1 = F.filter(function (f) { return f.reg && f.reg.meses >= 10; }), c2 = F.filter(function (f) { return f.reg && f.reg.meses <= 3; });
+      var bc = barras('vac150', c1, 'Control lechero 10 meses o más', c2, 'Control lechero 3 meses o menos'), bc2 = barras('pren', c1, 'Control lechero 10 meses o más', c2, 'Control lechero 3 meses o menos');
+      if (bc || bc2) out.push(cardA('Lo que se registra se puede mejorar', '#0F6E56', 'Los tambos que hacen control lechero todos los meses' + (bc2 ? ' preñan ' + (bc2.a.m >= bc2.b.m ? dif(bc2.a.m, bc2.b.m) + ' puntos más' : dif(bc2.a.m, bc2.b.m) + ' puntos menos') + ' cada 21 días' : '') + (bc ? (bc2 ? ' y' : '') + ' tienen ' + (bc.a.m <= bc.b.m ? dif(bc.a.m, bc.b.m) + ' puntos menos' : dif(bc.a.m, bc.b.m) + ' puntos más') + ' de vacas vacías con más de 150 días' : '') + ' que los que casi no controlan.', (bc2 ? bc2.h : '') + (bc ? bc.h : ''), 'Meses con control en los últimos 12'));
+      var sinReg = [['sin control lechero todos los meses', function (f) { return !(f.reg && f.reg.meses >= 10); }], ['sin la causa de las bajas anotada', function (f) { return !(f.cz && f.cz.n >= 5 && f.cz.con >= f.cz.n * 0.5); }], ['sin mastitis anotada', function (f) { return !(f.reg && f.reg.mast >= 5); }], ['sin las terneras registradas al nacer', function (f) { return !(f.baj && f.baj.nacH >= 10 && f.baj.nac >= f.baj.nacH * 0.5); }]];
+      out.push(cardB('Lo que no se registra', '#0F6E56', nf(F.filter(function (f) { return sinReg.filter(function (q2) { return q2[1](f); }).length >= 2; }).length / nT * 100, 0) + '%', 'de los tambos', 'no registran dos o más de estas cosas', sinReg.map(function (q2) { return nf(F.filter(q2[1]).length / nT * 100, 0) + '% ' + q2[0]; }).join(' · '), 'Lo que está en la base de cada tambo, últimos 12 meses'));
+      return '<section class="card rkhead"><h2>Mensajes de la población</h2><p class="cap">Ideas fuerza que salen de los datos de los tambos cargados, para productores y técnicos. Las comparaciones entre grupos de tambos muestran una asociación, no prueban la causa. Cada mensaje se comparte como imagen con la flecha de arriba a la derecha.</p></section><div class="msjg">' + out.join('') + '</div><p class="ifirma">Dr. Mauro Torterolo</p>';
+    }
     // secciones del panel (opción B elegida): un renglón por sección, cada una con su color (claro / oscuro)
     var PAN_SEC = [
       ['Reproducción', '#378ADD', '#185FA5', '#85B7EB', ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp', 'iep']],
@@ -6383,12 +6439,12 @@
       return '<section class="card rkhead"><h2>Panel de la población</h2><p class="cap">Cada cuadro: el promedio de los tambos; la franja va del 25% al 75% de los tambos dentro del rango, con una raya en la mediana. Tocá un cuadro para ver su ranking.</p></section>' + tiles + '<div class="ppch">' + zh + ph + dh + '</div><p class="ifirma">Dr. Mauro Torterolo</p>';
     }
     function pdfPob() {
-      var t = document.title; document.title = (state.pobVista === 'gen' ? 'Indicadores de la poblacion ' : state.pobVista === 'tambo' ? 'Tambo en la poblacion ' : state.pobVista === 'muestra' ? 'Muestra de la poblacion ' : state.pobVista === 'panel' ? 'Panel de la poblacion ' : 'Ranking de la poblacion ') + today();
+      var t = document.title; document.title = (state.pobVista === 'gen' ? 'Indicadores de la poblacion ' : state.pobVista === 'tambo' ? 'Tambo en la poblacion ' : state.pobVista === 'muestra' ? 'Muestra de la poblacion ' : state.pobVista === 'panel' ? 'Panel de la poblacion ' : state.pobVista === 'msj' ? 'Mensajes de la poblacion ' : 'Ranking de la poblacion ') + today();
       setTimeout(function () { window.print(); setTimeout(function () { document.title = t; }, 500); }, 50);
     }
     function pobHTML() {
       var vista = state.pobVista || 'panel';
-      var bar = '<div class="infbar"><button class="btn" data-a="pobcerrar">Volver</button><div class="filters">' + [['panel', 'Panel'], ['tabla', 'Tablas'], ['rank', 'Ranking'], ['gen', 'Indicadores'], ['tambo', 'Tambo'], ['muestra', 'Muestra']].map(function (c) { return '<button class="fchip" data-a="pobvista" data-pv="' + c[0] + '" aria-pressed="' + (vista === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div>' +
+      var bar = '<div class="infbar"><button class="btn" data-a="pobcerrar">Volver</button><div class="filters">' + [['panel', 'Panel'], ['tabla', 'Tablas'], ['rank', 'Ranking'], ['gen', 'Indicadores'], ['msj', 'Mensajes'], ['tambo', 'Tambo'], ['muestra', 'Muestra']].map(function (c) { return '<button class="fchip" data-a="pobvista" data-pv="' + c[0] + '" aria-pressed="' + (vista === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div>' +
         (vista === 'tabla' ? '<button class="btn" data-a="pobcalc">Recalcular</button>' : '<button class="btn primary" data-a="pobpdf">PDF</button>') + '</div>';
       if (!POB || POB.cargando) return bar + '<section class="card"><h2>Población de tambos</h2><p class="hint">Calculando… ' + esc(POB && POB.prog || '') + '</p></section>';
       var F = POB.filas.filter(function (f) { return !f.sin && !f.error; }), sin = POB.filas.filter(function (f) { return f.sin || f.error; });
@@ -6396,6 +6452,7 @@
       if (vista === 'gen') return '<div class="pob">' + bar + pobGenHTML(F) + '</div>';
       if (vista === 'tambo') return '<div class="pob">' + bar + pobTamboHTML(F) + '</div>';
       if (vista === 'muestra') return '<div class="pob">' + bar + pobMuestraHTML(F) + '</div>';
+      if (vista === 'msj') return '<div class="pob">' + bar + pobMensajesHTML(F) + '</div>';
       if (vista === 'panel') {
         // filtro por tipo de servicio: todos, solo estacionales o solo los que sirven todo el año
         // "marzo a setiembre": tambos donde el 95% o más de los partos de vacas de los últimos 12 meses cae de marzo a setiembre
@@ -7203,6 +7260,7 @@
         if (nav) nav.hidden = true;
         main.innerHTML = pobHTML();
         // el tambo en la población: cada tarjeta se comparte como imagen, con el nombre del tambo elegido
+        if (state.pobVista === 'msj') { SHX = { nombre: 'Población de tambos', fecha: today() }; vetCompartir(main); }
         if (state.pobVista === 'tambo' && POB && POB.filas) { var fx = POB.filas.filter(function (x) { return pobKey(x) === state.pobTb; })[0] || POB.filas.filter(function (x) { return !x.sin && !x.error; }).sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); })[0]; if (fx) SHX = { nombre: fx.nombre, fecha: fx.ref }; vetCompartir(main); }
         return;
       }

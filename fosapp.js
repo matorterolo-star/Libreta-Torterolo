@@ -116,6 +116,19 @@
       g.an.sort(cmp).forEach(function (x) { var b = null, bd = 11; g.ctAll.forEach(function (c) { var d = Math.abs(diffDays(c[0], x[0])); if (d < bd) { bd = d; b = c; } }); if (b) { b[2] = x[1]; b[3] = x[2]; b[4] = x[3]; } }); g.pa.sort(cmp); g.ev.sort(cmp); g.ta.sort(cmp); g.sec.sort(); g.ab.sort();
       // número de lactancia: en el parto FOSAPP anota la lactancia que termina (0 = vaquillona), así que el parto abre esa + 1.
       // Se cuenta hacia atrás desde la lactancia actual del animal, que es la más confiable (a veces el dato del parto viene en 0)
+      // partos repetidos (bases con el mismo parto cargado muchas veces, p. ej. Braga: vacas con 600 lactancias): se deja un parto
+      // por fecha, y un parto normal a menos de 200 días del anterior se toma como el mismo (los abortos se conservan)
+      var paOk = [];
+      g.pa.forEach(function (p) {
+        var u = paOk[paOk.length - 1];
+        if (u && u[0] === p[0]) return;
+        if (u && p[2] !== 'A' && u[2] !== 'A' && diffDays(p[0], u[0]) < 200) return;
+        paOk.push(p);
+      });
+      g.pa = paOk;
+      // eventos repetidos el mismo día: uno solo
+      var unico = function (arr, k) { var vis = {}; return arr.filter(function (e) { var q = e.slice(0, k).join('|'); if (vis[q]) return false; vis[q] = 1; return true; }); };
+      g.ev = unico(g.ev, 2); g.ta = unico(g.ta, 2); g.sec = unico(g.sec.map(function (f) { return [f]; }), 1).map(function (e) { return e[0]; }); g.ab = unico(g.ab.map(function (f) { return [f]; }), 1).map(function (e) { return e[0]; });
       var n = g.pa.length, L = 0;
       // (algunas bases traen en el dato de lactancia números sin sentido, como 4841, en partos viejos: se ignoran los mayores de 20)
       g.pa.forEach(function (p) { if (p[1] <= 20 && p[1] + 1 > L) L = p[1] + 1; });
