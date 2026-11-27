@@ -5790,6 +5790,34 @@
         if (r.reg && r.reg.ultT != null) r.ultTacto = r.reg.ultT;
         r.diasResp = A.diffDays(today(), ref);
       } catch (e) {}
+      // de la preñez al parto: preñeces confirmadas por tacto con parto esperado (concepción + 283 días) en el último ejercicio
+      // cerrado (julio a junio, el mismo de "Partos de multíparas"), y qué pasó con cada una
+      try {
+        var yP = +ref.slice(0, 4) - (+ref.slice(5, 7) < 7 ? 1 : 0), e0 = (yP - 1) + '-07-01', e1x = yP + '-06-30';
+        var PP = { n: 0, par: 0, parQ: 0, ab: 0, perd: 0, ven: 0, mue: 0, sin: 0, nQ: 0, lbl: String(yP - 1).slice(2) + '/' + String(yP).slice(2) }, vis = {};
+        infLista().forEach(function (x) {
+          var h = x.h, a = x.a, pa = (h.pa || []).filter(function (p) { return p[0]; }), sv = (h.ev || []).filter(function (e) { return e[1] === 'S'; }), ta = h.ta || [];
+          var abs = pa.filter(function (p) { return /^A/.test(p[2] || ''); }).map(function (p) { return p[0]; }).concat(h.ab || []);
+          ta.forEach(function (t) {
+            if (!esPren(t[1])) return;
+            var T = t[0], pAnt = pa.filter(function (p) { return p[0] < T && !/^A/.test(p[2] || ''); }).pop(), desde = pAnt ? pAnt[0] : '0000';
+            var ss = sv.filter(function (e) { return e[0] > desde && A.diffDays(T, e[0]) >= 28; }); if (!ss.length) return;
+            var conc = ss[ss.length - 1][0], esp = A.addDays(conc, 283); if (esp < e0 || esp > e1x) return;
+            var k = (a.key || a.rp) + '|' + conc; if (vis[k]) return; vis[k] = 1;
+            if (!enSel(unidadEn(x, T))) return;
+            var vaq = !pAnt; PP.n++; if (vaq) PP.nQ++;
+            var parto = pa.filter(function (p) { var d = A.diffDays(p[0], conc); return !/^A/.test(p[2] || '') && d >= 240 && d <= 320; })[0];
+            if (parto) { PP.par++; if (vaq) PP.parQ++; return; }
+            if (abs.some(function (f2) { var d = A.diffDays(f2, conc); return d >= 35 && d < 260; })) { PP.ab++; return; }
+            var b = a.bFecha;
+            if (b && b > T && A.diffDays(b, conc) < 320) { if (a.bTipo === 'muerte') PP.mue++; else PP.ven++; return; }
+            var lim = A.addDays(conc, 300);
+            if (ta.some(function (t2) { return t2[0] > T && t2[0] < lim && esVacia(t2[1]); }) || sv.some(function (e) { return e[0] > T && e[0] < lim; })) { PP.perd++; return; }
+            PP.sin++;
+          });
+        });
+        if (PP.n >= 30) r.pp = PP;
+      } catch (e) {}
       // mastitis: la misma cuenta que la tarjeta de Leche (casos y vacas tratadas en los últimos 12 meses)
       try { POBX = {}; mastitisHTML(); if (POBX.mast) r.mast = POBX.mast; } catch (e) {} finally { POBX = null; }
     }
@@ -5868,6 +5896,11 @@
       { k: 'pren', sinToro: true, g: 'Reproducción', t: 'Tasa de preñez (21 días)', u: '%', alto: true, d: 0, val: function (f) { var T = pobT(f); return T && T.aptas >= 30 ? T.pren / T.aptas * 100 : null; }, nota: 'Aptas que se preñan en el ciclo / aptas, ciclos cerrados (temporada o últimos 12 meses, según el tipo de servicio).' },
       { k: 'prenA', sinToro: true, g: 'Reproducción', t: 'Tasa de preñez año anterior', u: '%', alto: true, d: 0, val: function (f) { var T = f.sTodo ? f.T12A : f.TA; return T && T.aptas >= 30 ? T.pren / T.aptas * 100 : null; }, nota: 'La misma cuenta un año antes: la temporada pasada o los 12 meses anteriores.' },
       { k: 'vac150', cero: true, g: 'Reproducción', t: 'Vacas vacías con más de 150 días en leche', u: '%', alto: false, d: 0, val: function (f) { return f.vac150; }, nota: 'Vacas (en ordeñe y secas) sin preñez confirmada, sin descarte programado y con más de 150 días de paridas, en % de todas las vacas, a la fecha del respaldo. El problema reproductivo acumulado.' },
+      { k: 'ppPar', g: 'De la preñez al parto', t: 'Preñeces que terminaron en parto', u: '%', alto: true, d: 0, sub: function (f) { return f.pp ? f.pp.par + ' partos de ' + f.pp.n + ' preñeces confirmadas' : ''; }, val: function (f) { return f.pp ? f.pp.par / f.pp.n * 100 : null; }, nota: 'Preñeces confirmadas por tacto (vacas y vaquillonas) con parto esperado (concepción + 283 días) en el último ejercicio cerrado, el mismo de los partos de multíparas: cuántas parieron (parto entre 240 y 320 días de la concepción).' },
+      { k: 'ppPer', cero: true, g: 'De la preñez al parto', t: 'Preñeces perdidas', u: '%', alto: false, d: 1, val: function (f) { return f.pp ? (f.pp.ab + f.pp.perd) / f.pp.n * 100 : null; }, nota: 'De esas preñeces: abortos anotados más las que quedaron vacías después del tacto (tacto vacía o un servicio nuevo antes del parto).' },
+      { k: 'ppAb', cero: true, g: 'De la preñez al parto', t: 'Abortos anotados', u: '%', alto: false, d: 1, val: function (f) { return f.pp ? f.pp.ab / f.pp.n * 100 : null; }, nota: 'De esas preñeces, las que tienen un aborto anotado.' },
+      { k: 'ppBaj', cero: true, g: 'De la preñez al parto', t: 'Vendidas o muertas preñadas', u: '%', alto: false, d: 1, sub: function (f) { return f.pp ? f.pp.ven + ' vendidas · ' + f.pp.mue + ' muertas' : ''; }, val: function (f) { return f.pp ? (f.pp.ven + f.pp.mue) / f.pp.n * 100 : null; }, nota: 'De esas preñeces, las vacas o vaquillonas que salieron del tambo preñadas, antes de parir.' },
+      { k: 'ppSin', cero: true, g: 'De la preñez al parto', t: 'Sin registro del parto', u: '%', alto: false, d: 1, val: function (f) { return f.pp ? f.pp.sin / f.pp.n * 100 : null; }, nota: 'De esas preñeces, las que siguen en el tambo sin parto, aborto ni tacto vacía anotados: casi siempre un parto que no se cargó.' },
       { k: 'oto', g: 'Reproducción', t: 'Partos de otoño confirmados, contra el otoño pasado', u: '%', alto: true, d: 0, sub: function (f) { return f.oto ? f.oto.conf + ' preñeces confirmadas · ' + f.oto.pas + ' partos el otoño pasado' : ''; }, val: function (f) { return f.oto ? f.oto.conf / f.oto.pas * 100 : null; }, nota: 'Preñadas por tacto (vacas y vaquillonas) con parto probable de febrero a mayo del año que viene, en % de los partos de febrero a mayo de este año. Solo lo confirmado: sube a medida que se tacta.' },
       { k: 'p150', g: 'Reproducción', t: 'Preñadas a 150 días en leche, últimos 12 meses', u: '%', alto: true, d: 0, val: function (f) { return f.p150; }, nota: 'Vacas que cumplieron 150 días en leche en los últimos 12 meses y se preñaron antes. No depende de la época de servicio.' },
       { k: 'pg', g: 'Reproducción', t: '% preñez general', u: '%', alto: true, d: 0, val: function (f) { return f.pg; }, nota: 'Vacas preñadas en la temporada / vacas aptas al inicio (como el informe anual).' },
@@ -6107,6 +6140,7 @@
         fila('Terneras registradas al nacer', F.filter(function (f) { return f.baj && f.baj.nacH >= 10 && f.baj.nac >= f.baj.nacH * 0.5; }).length, 'al menos la mitad de las hembras paridas') +
         fila('Muertes de terneras anotadas', F.filter(function (f) { return f.baj && f.baj.nacM > 0; }).length) +
         fila('Vacas con número de lactancia sin sentido', F.filter(function (f) { return f.lacMal > 0; }).length, F.some(function (f) { return f.lacMal > 0; }) ? 'más de 20: ' + F.filter(function (f) { return f.lacMal > 0; }).map(function (f) { return esc(f.nombre) + ' (' + f.lacMal + ')'; }).join(', ') + '. Volver a cargar la base.' : 'más de 20 lactancias') +
+        fila('Partos sin cargar (más del 10% de las preñeces sin registro del parto)', F.filter(function (f) { return f.pp && f.pp.sin / f.pp.n > 0.1; }).length, F.some(function (f) { return f.pp && f.pp.sin / f.pp.n > 0.1; }) ? F.filter(function (f) { return f.pp && f.pp.sin / f.pp.n > 0.1; }).map(function (f) { return esc(f.nombre) + ' (' + Math.round(f.pp.sin / f.pp.n * 100) + '%)'; }).join(', ') : '') +
         fila('Causa de baja anotada', F.filter(function (f) { return f.cz && f.cz.n >= 5 && f.cz.con >= f.cz.n * 0.5; }).length, 'en al menos la mitad de las bajas de vacas') +
         fila('Último tacto hace más de 30 días', F.filter(function (f) { return f.ultTacto != null && f.ultTacto > 30; }).length, 'a la fecha del respaldo') +
         fila('Respaldo de hace más de 60 días', F.filter(function (f) { return f.diasResp > 60; }).length) +
@@ -6151,7 +6185,8 @@
         iep: 'Partos de los últimos 2 años', seca: 'Partos de los últimos 2 años', secaOk: 'Partos de los últimos 2 años', salEdad: 'Salidas de los últimos 2 años', salLac: 'Salidas de los últimos 2 años',
         e1s: 'Vaquillonas paridas en los últimos 2 años', e1p: 'Vaquillonas paridas en los últimos 2 años', p24: 'Vaquillonas paridas en los últimos 2 años', vC1: 'Última zafra de vaquillonas completa (may a abr)', vPren: 'Última zafra de vaquillonas completa (may a abr)',
         ejM: ejl(0), ejP: ejl(0), ejMA: ejl(1), ejMD: ejl(0).split(' (')[0] + ' contra el anterior',
-        salT: 'Partos de 12 meses, con 60 días de seguimiento', mTer: 'Nacidas hace 15 a 3 meses',
+        salT: 'Partos de 12 meses, con 60 días de seguimiento',
+        ppPar: 'Preñeces con parto esperado en el ' + ejl(0).replace('Ejercicio', 'ejercicio'), ppPer: 'Preñeces con parto esperado en el ' + ejl(0).replace('Ejercicio', 'ejercicio'), ppAb: 'Preñeces con parto esperado en el ' + ejl(0).replace('Ejercicio', 'ejercicio'), ppBaj: 'Preñeces con parto esperado en el ' + ejl(0).replace('Ejercicio', 'ejercicio'), ppSin: 'Preñeces con parto esperado en el ' + ejl(0).replace('Ejercicio', 'ejercicio'), mTer: 'Nacidas hace 15 a 3 meses',
         zDif: (zc || 'Zafra en curso') + ', misma semana que la anterior' };
       if (/^z/.test(ind.k) && !P[ind.k]) return zaf;
       return P[ind.k] || u12;
@@ -6160,6 +6195,7 @@
     // secciones del panel (opción B elegida): un renglón por sección, cada una con su color (claro / oscuro)
     var PAN_SEC = [
       ['Reproducción', '#378ADD', '#185FA5', '#85B7EB', ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp']],
+      ['De la preñez al parto', '#BA7517', '#854F0B', '#EF9F27', ['ppPar', 'ppPer', 'ppBaj', 'ppSin']],
       ['Leche', '#1D9E75', '#0F6E56', '#5DCAA5', ['lv12', 'pers']],
       ['Recría y vaquillonas', '#7F77DD', '#534AB7', '#AFA9EC', ['e1p', 'p24']],
       ['Rodeo', '#888780', '#5F5E5A', '#B4B2A9', ['ejM', 'l3', 'iep']],
@@ -6232,6 +6268,17 @@
         ph = '<section class="card"><h2>Partos por mes · la población</h2><div class="mleg"><span><i style="background:#9FB0CC"></i>Vacas</span><span><i style="background:#C9A227"></i>Vaquillonas</span></div><svg class="mchart" viewBox="0 0 ' + W2 + ' ' + H2 + '" role="img" aria-label="Partos por mes de toda la población">' + sb + '</svg>' +
           '<p class="cap">Partos de cada mes (sin abortos) en % de la vaca masa promedio de toda la población, sumando los tambos: los grandes pesan más. Últimos 12 meses de cada respaldo.</p></section>';
       }
+      // 2b) de la preñez al parto: todas las preñeces de la población (barra apilada)
+      var PT = { n: 0, par: 0, ab: 0, perd: 0, ven: 0, mue: 0, sin: 0 }, nPT = 0, lblPP = '';
+      F.forEach(function (f) { if (!f.pp) return; nPT++; lblPP = f.pp.lbl; Object.keys(PT).forEach(function (q) { PT[q] += f.pp[q]; }); });
+      var pph = '';
+      if (PT.n) {
+        var seg = [['Parieron', PT.par, '#1D9E75'], ['Abortos', PT.ab, '#E24B4A'], ['Vacías después del tacto', PT.perd, '#F09595'], ['Vendidas preñadas', PT.ven, '#EF9F27'], ['Murieron preñadas', PT.mue, '#854F0B'], ['Sin registro del parto', PT.sin, '#B4B2A9']].filter(function (q) { return q[1]; });
+        pph = '<section class="card ppz"><h2>De la preñez al parto · ejercicio ' + esc(lblPP) + '</h2><p class="cap" style="margin-top:0">' + nf(PT.n) + ' preñeces confirmadas por tacto con parto esperado de julio a junio, en ' + nPT + ' tambos. Qué pasó con cada una:</p>' +
+          '<div style="display:flex;height:26px;border-radius:7px;overflow:hidden;margin:10px 0 8px">' + seg.map(function (q) { return '<i title="' + q[0] + '" style="flex:' + q[1] + ';background:' + q[2] + ';-webkit-print-color-adjust:exact;print-color-adjust:exact"></i>'; }).join('') + '</div>' +
+          '<div class="mleg">' + seg.map(function (q) { return '<span><i style="background:' + q[2] + '"></i>' + q[0] + ' <b>' + nf(q[1] / PT.n * 100, 1) + '%</b> <small style="color:var(--muted)">(' + nf(q[1]) + ')</small></span>'; }).join('') + '</div>' +
+          '<p class="cap">Parió: parto entre 240 y 320 días de la concepción. Es el mismo ejercicio que "Partos de multíparas": lo que se preñó y cuánto parió, en las mismas fechas.</p></section>';
+      }
       // 3) tasa de servicio contra concepción: un punto por tambo (sin los marcados con toro)
       var TT = pobToro(), P = F.filter(function (f) { return !TT[pobKey(f)] && !f.toroAuto; }).map(function (f) { var T = pobT(f); return T && T.aptas >= 30 && T.sOk + T.sMal >= 20 ? { x: T.serv / T.aptas * 100, y: T.sOk / (T.sOk + T.sMal) * 100, t: f.sTodo } : null; }).filter(Boolean), dh = '';
       if (P.length >= 3) {
@@ -6247,6 +6294,7 @@
         dh = '<section class="card"><h2>Servicio contra concepción</h2><div class="mleg"><span><i style="background:#2457A6"></i>Servicio estacional</span><span><i style="background:#C9A227"></i>Todo el año</span></div><svg class="mchart" viewBox="0 0 ' + W3 + ' ' + H3 + '" role="img" aria-label="Tasa de servicio contra concepción, un punto por tambo">' + sd + '</svg>' +
           '<p class="cap">Un punto por tambo; las líneas punteadas son los promedios (servicio ' + Math.round(mxs) + '%, concepción ' + Math.round(mys) + '%). Abajo a la izquierda: problema de detección de celo y de concepción; arriba a la izquierda: se detecta poco; abajo a la derecha: concibe poco. Sin los tambos con toro en el rodeo.</p></section>';
       }
+      zh = zh + pph;
       return '<section class="card rkhead"><h2>Panel de la población</h2><p class="cap">Cada cuadro: el promedio de los tambos; la franja va del 25% al 75% de los tambos dentro del rango, con una raya en la mediana. Tocá un cuadro para ver su ranking.</p></section>' + tiles + '<div class="ppch">' + zh + ph + dh + '</div><p class="ifirma">Dr. Mauro Torterolo</p>';
     }
     function pdfPob() {
