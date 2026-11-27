@@ -6157,31 +6157,44 @@
       return P[ind.k] || u12;
     }
     // panel de la población: cuadros con los indicadores clave (promedio y franja) y gráficos de toda la población
-    var PAN_IND = ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp', 'lv12', 'pers', 'e1p', 'p24', 'ejM', 'l3', 'iep', 'salT', 'muV', 'czRep', 'mTer', 'mInc'];
+    // secciones del panel (opción B elegida): un renglón por sección, cada una con su color (claro / oscuro)
+    var PAN_SEC = [
+      ['Reproducción', '#378ADD', '#185FA5', '#85B7EB', ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp']],
+      ['Leche', '#1D9E75', '#0F6E56', '#5DCAA5', ['lv12', 'pers']],
+      ['Recría y vaquillonas', '#7F77DD', '#534AB7', '#AFA9EC', ['e1p', 'p24']],
+      ['Rodeo', '#888780', '#5F5E5A', '#B4B2A9', ['ejM', 'l3', 'iep']],
+      ['Bajas', '#D85A30', '#993C1D', '#F0997B', ['salT', 'muV', 'czRep', 'mTer']],
+      ['Mastitis', '#D4537E', '#993556', '#ED93B1', ['mInc']]];
     function pobPanelHTML(F) {
       tvCss();
       if (!document.getElementById('ppCss')) {
         var st = document.createElement('style'); st.id = 'ppCss';
-        st.textContent = '.ppg{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:0 0 14px}.ppk{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;text-align:left;cursor:pointer;font:inherit;color:inherit}.ppk:hover{border-color:var(--muted)}' +
+        st.textContent = '.ppg{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:0 0 6px}.ppk{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--sc,var(--line));border-radius:0 0 14px 14px;padding:10px 12px;text-align:left;cursor:pointer;font:inherit;color:inherit}.ppk:hover{border-color:var(--muted)}' +
           '.ppk span{display:block;font-size:12.5px;color:var(--muted);font-weight:600;line-height:1.25;min-height:2.5em}.ppk b{display:block;font-size:26px;font-weight:800;margin:2px 0 6px;line-height:1.1}.ppk small{display:block;font-size:11.5px;color:var(--muted);margin-top:5px}.ppk small.ppper{margin-top:2px;font-size:11px;font-style:italic}' +
-          '.ppb{position:relative;height:10px}.ppb i{position:absolute;top:4px;left:0;right:0;height:2px;background:var(--line)}.ppb em{position:absolute;top:0;height:10px;border-radius:5px;background:#9FB0CC}.ppb u{position:absolute;top:-2px;width:2.5px;height:14px;background:#12274A;border-radius:1px}' +
+          '.ppb{position:relative;height:10px}.ppb i{position:absolute;top:4px;left:0;right:0;height:2px;background:var(--line)}.ppb em{position:absolute;top:0;height:10px;border-radius:5px;background:var(--sc,#9FB0CC);opacity:.5}.ppb u{position:absolute;top:-2px;width:2.5px;height:14px;background:#12274A;border-radius:1px}' +
           '.ppk b em{font-style:normal;font-size:15px;font-weight:700;margin-left:3px;color:var(--muted)}.ppch .kpis small{display:block;font-size:11.5px;color:var(--muted);margin-top:3px;font-weight:500;line-height:1.3}.ppch .ppz{grid-column:1/-1}.ppz .ppzw{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px;align-items:center}@media (max-width:760px){.ppz .ppzw{grid-template-columns:1fr}}' +
-          '@media (prefers-color-scheme:dark){.ppb em{background:#43577F}.ppb u{background:#E3B84A}}.ppz .mchart{max-width:560px;display:block;margin:0 auto}.ppch{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:12px}.ppch .card{margin:0}' +
+          '.ppsec{display:flex;align-items:center;gap:8px;margin:16px 0 8px;font-size:15px;font-weight:800;color:var(--st)}.ppsec i{width:12px;height:12px;border-radius:3px;background:var(--sc)}@media (prefers-color-scheme:dark){.ppsec{color:var(--sd)}}' +
+          '.ppsum{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin:0 0 4px}.ppsum span{display:block;font-size:12.5px;color:var(--muted);font-weight:600}.ppsum b{font-size:26px;font-weight:800}.ppsum small{font-size:12px;color:var(--muted);text-align:right;line-height:1.4}' +
+          '@media (prefers-color-scheme:dark){.ppb u{background:#ECEFF1}}.ppch{margin-top:16px}.ppz .mchart{max-width:560px;display:block;margin:0 auto}.ppch{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:12px}.ppch .card{margin:0}' +
           '.ppl{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}.ppl.c{stroke:#C9A227;stroke-width:3}.ppl.m{stroke:#C9A227;stroke-dasharray:5 4;stroke-width:2}.ppl.a{stroke:#12274A;opacity:.7}.ppbar{fill:#9FB0CC}.ppbar.q{fill:#C9A227}.ppd.e{fill:#2457A6}.ppd.t{fill:#C9A227}.ppax{stroke:var(--muted);stroke-width:1}.ppref{stroke:var(--muted);stroke-dasharray:3 3;stroke-width:1}' +
           '@media (prefers-color-scheme:dark){.ppl.a{stroke:#7FA8EE}.ppd.e{fill:#7FA8EE}}@media print{.ppk,.ppch .card{break-inside:avoid}.ppb em,.ppb u,.ppbar,.ppd{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
         document.head.appendChild(st);
       }
       var ids = {}, vac = 0, nTodo = 0, nEst = 0; F.forEach(function (f) { ids[f.id] = 1; vac += f.vacas || 0; if (f.sTodo === true) nTodo++; else if (f.sTodo === false) nEst++; });
       // cuadros: promedio grande; franja del 25% al 75% dentro del rango (mín–máx), raya en la mediana
-      var tiles = '<div class="ppg"><div class="ppk" style="cursor:default"><span>Tambos · vacas en ordeñe y secas</span><b>' + Object.keys(ids).length + ' · ' + nf(vac) + '</b><small>' + nEst + ' con servicio estacional · ' + nTodo + ' todo el año</small></div>' +
-        PAN_IND.map(function (k) {
-          var ind = POB_IND.filter(function (i) { return i.k === k; })[0]; if (!ind) return '';
-          var S = pobStats(F, ind); if (!S.n) return '';
-          var a = S.min, b = S.max, w = function (x) { return b > a ? ((x - a) / (b - a) * 100).toFixed(1) : '50'; };
-          return '<button class="ppk" data-a="pobir" data-g="' + esc(ind.g) + '"><span>' + esc(pobNomZ(ind)) + '</span><b>' + pobFmt(S.prom, ind).replace(/ (días|meses|años|L|puntos)$/, '<em>$1</em>') + '</b>' +
-            '<div class="ppb"><i></i><em style="left:' + w(S.p25) + '%;width:' + Math.max(1, w(S.p75) - w(S.p25)).toFixed(1) + '%"></em><u style="left:' + w(S.med) + '%"></u></div>' +
-            '<small>Promedio · rango ' + pobNum(a, ind) + ' a ' + pobNum(b, ind) + (ind.u && ind.u !== '%' ? ' ' + ind.u : ind.u) + ' · ' + S.n + ' tambos</small><small class="ppper">' + esc(pobPer(ind, F)) + '</small></button>';
-        }).join('') + '</div>';
+      var tile = function (k, sec) {
+        var ind = POB_IND.filter(function (i2) { return i2.k === k; })[0]; if (!ind) return '';
+        var S = pobStats(F, ind); if (!S.n) return '';
+        var a = S.min, b = S.max, w = function (x) { return b > a ? ((x - a) / (b - a) * 100).toFixed(1) : '50'; };
+        return '<button class="ppk" style="--sc:' + sec[1] + '" data-a="pobir" data-g="' + esc(ind.g) + '"><span>' + esc(pobNomZ(ind)) + '</span><b>' + pobFmt(S.prom, ind).replace(/ (días|meses|años|L|puntos)$/, '<em>$1</em>') + '</b>' +
+          '<div class="ppb"><i></i><em style="left:' + w(S.p25) + '%;width:' + Math.max(1, w(S.p75) - w(S.p25)).toFixed(1) + '%"></em><u style="left:' + w(S.med) + '%"></u></div>' +
+          '<small>Promedio · rango ' + pobNum(a, ind) + ' a ' + pobNum(b, ind) + (ind.u && ind.u !== '%' ? ' ' + ind.u : ind.u) + ' · ' + S.n + ' tambos</small><small class="ppper">' + esc(pobPer(ind, F)) + '</small></button>';
+      };
+      var tiles = '<div class="ppsum"><div><span>Tambos · vacas en ordeñe y secas</span><b>' + Object.keys(ids).length + ' · ' + nf(vac) + '</b></div><small>' + nEst + ' con servicio estacional<br>' + nTodo + ' con servicio todo el año</small></div>' +
+        PAN_SEC.map(function (sec) {
+          var h = sec[4].map(function (k) { return tile(k, sec); }).join(''); if (!h) return '';
+          return '<h3 class="ppsec" style="--sc:' + sec[1] + ';--st:' + sec[2] + ';--sd:' + sec[3] + '"><i></i>' + esc(sec[0]) + '</h3><div class="ppg">' + h + '</div>';
+        }).join('');
       // 1) zafra en curso: promedio de los tambos de servicio estacional, semana a semana desde el inicio de servicios
       var Z = F.filter(function (f) { return !f.sTodo && f.zw && f.zw.cur.length; }), zh = '';
       if (Z.length >= 3) {
