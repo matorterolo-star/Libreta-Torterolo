@@ -5948,7 +5948,9 @@
     }
     // sin la unidad (va en el nombre del indicador), para la tabla compacta del informe general
     function pobNum(x, ind) { return x == null || isNaN(x) ? '–' : nf(x, ind.d, ind.d); }
-    function pobTit(ind) { return ind.t + (ind.u ? ' (' + ind.u + ')' : ''); }
+    function pobTit(ind) { return pobNomZ(ind) + (ind.u ? ' (' + ind.u + ')' : ''); }
+    // los indicadores de cierre de zafra llevan la zafra en el nombre (p. ej. "Preñez total de la zafra 25")
+    function pobNomZ(ind) { if (!/^z/.test(ind.k) || ind.k === 'zDif' || !POB || !POB.filas) return ind.t; var l = pobModa(POB.filas, function (f) { return f.zc && f.zc.lbl; }); return l ? ind.t.replace(/de la zafra|en la zafra/, function (x) { return x + ' ' + l.replace(/\D/g, ''); }) + (/zafra/.test(ind.t) ? '' : ' · ' + l) : ind.t; }
     function pobFmt(x, ind) { return x == null || isNaN(x) ? '–' : (ind.u === 'puntos' && x > 0.5 ? '+' : '') + nf(x, ind.d, ind.d) + (ind.u === '%' ? '%' : ind.u ? ' ' + ind.u : ''); }
     function pobToroHTML(F) {
       var T = pobToro(), n = F.filter(function (f) { return T[pobKey(f)] || f.toroAuto; }).length;
@@ -5982,7 +5984,7 @@
         var S = pobStats(F, ind); if (!S.n) return '';
         // barras desde 0; si hay valores negativos (zafra actual contra la anterior), desde el mínimo
         var lo = Math.min(0, S.min), max = S.max > lo ? S.max : lo + 1, pos = function (x) { return Math.max(0, Math.min(100, (x - lo) / (max - lo) * 100)); };
-        return '<section class="card rkcard"><h3>' + esc(ind.t) + '</h3><p class="cap">' + esc(ind.nota) + (ind.neutro ? '' : ' ' + (ind.alto ? 'Más alto es mejor.' : 'Más bajo es mejor.')) + '</p><div class="rk">' +
+        return '<section class="card rkcard"><h3>' + esc(pobNomZ(ind)) + '</h3><p class="cap"><b>' + esc(pobPer(ind, F)) + '.</b> ' + esc(ind.nota) + (ind.neutro ? '' : ' ' + (ind.alto ? 'Más alto es mejor.' : 'Más bajo es mejor.')) + '</p><div class="rk">' +
           S.L.map(function (z, j) {
             var mio = sel && String(z.f.id) === String(sel), n = nom(z.f);
             return '<div class="rkr' + (mio ? ' mio' : '') + '"><span class="rkp">' + (j + 1) + '°</span><span class="rkn">' + n + '</span><span class="rkb"><i style="width:' + pos(z.x).toFixed(1) + '%"></i><em style="left:' + pos(S.prom).toFixed(1) + '%"></em></span><span class="rkv">' + (z.atip ? '<span class="rkat" title="Valor atípico">⚠</span>' : '') + pobFmt(z.x, ind) + '</span></div>';
@@ -6130,6 +6132,30 @@
         '</tbody></table></div><p class="cap">Últimos 12 meses hasta la fecha del respaldo de cada tambo.</p></section>';
       return '<section class="card rkhead"><h2>Población de tambos · la muestra</h2><p class="cap">Cómo son los tambos y qué registran · ' + A.fmt(today()) + '</p></section>' + c1 + c2 + c3 + c4 + '<p class="ifirma">Dr. Mauro Torterolo</p>';
     }
+    // período de cada indicador, dicho para la población (cada tambo a la fecha de su respaldo)
+    function pobModa(F, fn) { var c = {}, b = null; F.forEach(function (f) { var v = fn(f); if (v) { c[v] = (c[v] || 0) + 1; if (!b || c[v] > c[b]) b = v; } }); return b; }
+    function pobPer(ind, F) {
+      var MS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
+      var zl = pobModa(F, function (f) { return f.zc && f.zc.lbl; }), zy = zl ? 2000 + +zl.replace(/\D/g, '') : null;
+      var zaf = zl ? zl + ' (may ' + String(zy).slice(2) + ' a feb ' + String(zy + 1).slice(2) + ')' : 'última zafra terminada';
+      var zc = pobModa(F, function (f) { return f.zw && f.zw.lbl; });
+      var ejl = function (i) { var l = pobModa(F, function (f) { return f.ej && f.ej[i] && f.ej[i].lbl; }); return l ? 'Ejercicio ' + l + ' (jul ' + l.slice(0, 2) + ' a jun ' + l.slice(3) + ')' : 'ejercicio julio a junio'; };
+      var ref = pobModa(F, function (f) { return f.ref; }) || today(), y = +ref.slice(0, 4), m = +ref.slice(5, 7);
+      var u12 = 'Últimos 12 meses (' + MS[m - 1] + ' ' + String(y - 1).slice(2) + ' a ' + MS[m - 1] + ' ' + String(y).slice(2) + ')';
+      var tempo = 'Temporada ' + String(m >= 5 ? y : y - 1).slice(2) + ' (estacionales) o últimos 12 meses';
+      var P = { serv: tempo, conc: tempo, pren: tempo, serv3: 'Primeros 3 ciclos de la temporada ' + String(m >= 5 ? y : y - 1).slice(2), prenA: 'Temporada o 12 meses del año anterior',
+        vac150: 'Hoy (fecha de cada respaldo)', l3: 'Hoy (fecha de cada respaldo)', l1: 'Hoy (fecha de cada respaldo)', vacas: 'Hoy (fecha de cada respaldo)', lv: 'Último control',
+        oto: 'Otoño ' + String(m > 5 ? y + 1 : y).slice(2) + ' (feb a may) contra otoño ' + String(m > 5 ? y : y - 1).slice(2),
+        pg: 'Temporada ' + String(m >= 5 ? y : y - 1).slice(2), ips: 'Temporada ' + String(m >= 5 ? y : y - 1).slice(2), ipp: 'Temporada ' + String(m >= 5 ? y : y - 1).slice(2), spp: 'Temporada ' + String(m >= 5 ? y : y - 1).slice(2),
+        picoP: 'Lactancias de los últimos 18 meses', picoM: 'Lactancias de los últimos 18 meses', pers: 'Lactancias de los últimos 18 meses',
+        iep: 'Partos de los últimos 2 años', seca: 'Partos de los últimos 2 años', secaOk: 'Partos de los últimos 2 años', salEdad: 'Salidas de los últimos 2 años', salLac: 'Salidas de los últimos 2 años',
+        e1s: 'Vaquillonas paridas en los últimos 2 años', e1p: 'Vaquillonas paridas en los últimos 2 años', p24: 'Vaquillonas paridas en los últimos 2 años', vC1: 'Última zafra de vaquillonas completa (may a abr)', vPren: 'Última zafra de vaquillonas completa (may a abr)',
+        ejM: ejl(0), ejP: ejl(0), ejMA: ejl(1), ejMD: ejl(0).split(' (')[0] + ' contra el anterior',
+        salT: 'Partos de 12 meses, con 60 días de seguimiento', mTer: 'Nacidas hace 15 a 3 meses',
+        zDif: (zc || 'Zafra en curso') + ', misma semana que la anterior' };
+      if (/^z/.test(ind.k) && !P[ind.k]) return zaf;
+      return P[ind.k] || u12;
+    }
     // panel de la población: cuadros con los indicadores clave (promedio y franja) y gráficos de toda la población
     var PAN_IND = ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp', 'lv12', 'pers', 'e1p', 'p24', 'ejM', 'l3', 'iep', 'salT', 'muV', 'czRep', 'mTer', 'mInc'];
     function pobPanelHTML(F) {
@@ -6137,7 +6163,7 @@
       if (!document.getElementById('ppCss')) {
         var st = document.createElement('style'); st.id = 'ppCss';
         st.textContent = '.ppg{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:0 0 14px}.ppk{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;text-align:left;cursor:pointer;font:inherit;color:inherit}.ppk:hover{border-color:var(--muted)}' +
-          '.ppk span{display:block;font-size:12.5px;color:var(--muted);font-weight:600;line-height:1.25;min-height:2.5em}.ppk b{display:block;font-size:26px;font-weight:800;margin:2px 0 6px;line-height:1.1}.ppk small{display:block;font-size:11.5px;color:var(--muted);margin-top:5px}' +
+          '.ppk span{display:block;font-size:12.5px;color:var(--muted);font-weight:600;line-height:1.25;min-height:2.5em}.ppk b{display:block;font-size:26px;font-weight:800;margin:2px 0 6px;line-height:1.1}.ppk small{display:block;font-size:11.5px;color:var(--muted);margin-top:5px}.ppk small.ppper{margin-top:2px;font-size:11px;font-style:italic}' +
           '.ppb{position:relative;height:10px}.ppb i{position:absolute;top:4px;left:0;right:0;height:2px;background:var(--line)}.ppb em{position:absolute;top:0;height:10px;border-radius:5px;background:#9FB0CC}.ppb u{position:absolute;top:-2px;width:2.5px;height:14px;background:#12274A;border-radius:1px}' +
           '.ppk b em{font-style:normal;font-size:15px;font-weight:700;margin-left:3px;color:var(--muted)}.ppch .kpis small{display:block;font-size:11.5px;color:var(--muted);margin-top:3px;font-weight:500;line-height:1.3}.ppch .ppz{grid-column:1/-1}.ppz .ppzw{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px;align-items:center}@media (max-width:760px){.ppz .ppzw{grid-template-columns:1fr}}' +
           '@media (prefers-color-scheme:dark){.ppb em{background:#43577F}.ppb u{background:#E3B84A}}.ppz .mchart{max-width:560px;display:block;margin:0 auto}.ppch{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:12px}.ppch .card{margin:0}' +
@@ -6152,9 +6178,9 @@
           var ind = POB_IND.filter(function (i) { return i.k === k; })[0]; if (!ind) return '';
           var S = pobStats(F, ind); if (!S.n) return '';
           var a = S.min, b = S.max, w = function (x) { return b > a ? ((x - a) / (b - a) * 100).toFixed(1) : '50'; };
-          return '<button class="ppk" data-a="pobir" data-g="' + esc(ind.g) + '"><span>' + esc(ind.t) + '</span><b>' + pobFmt(S.prom, ind).replace(/ (días|meses|años|L|puntos)$/, '<em>$1</em>') + '</b>' +
+          return '<button class="ppk" data-a="pobir" data-g="' + esc(ind.g) + '"><span>' + esc(pobNomZ(ind)) + '</span><b>' + pobFmt(S.prom, ind).replace(/ (días|meses|años|L|puntos)$/, '<em>$1</em>') + '</b>' +
             '<div class="ppb"><i></i><em style="left:' + w(S.p25) + '%;width:' + Math.max(1, w(S.p75) - w(S.p25)).toFixed(1) + '%"></em><u style="left:' + w(S.med) + '%"></u></div>' +
-            '<small>' + pobNum(a, ind) + ' a ' + pobNum(b, ind) + (ind.u && ind.u !== '%' ? ' ' + ind.u : ind.u) + ' · ' + S.n + ' tambos</small></button>';
+            '<small>Promedio · rango ' + pobNum(a, ind) + ' a ' + pobNum(b, ind) + (ind.u && ind.u !== '%' ? ' ' + ind.u : ind.u) + ' · ' + S.n + ' tambos</small><small class="ppper">' + esc(pobPer(ind, F)) + '</small></button>';
         }).join('') + '</div>';
       // 1) zafra en curso: promedio de los tambos de servicio estacional, semana a semana desde el inicio de servicios
       var Z = F.filter(function (f) { return !f.sTodo && f.zw && f.zw.cur.length; }), zh = '';
