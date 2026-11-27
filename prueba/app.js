@@ -5790,6 +5790,24 @@
         var pyV = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pyQ = pyV.slice(), lim12 = A.addDays(ref, 365);
         DB.animales.forEach(function (a) { if (a.estado !== 'prenada' || !a.partoProb || a.partoProb <= ref || a.partoProb > lim12) return; var mi = +a.partoProb.slice(5, 7) - 1; if (a.cat === 'vaquillona' || !a.pN) pyQ[mi]++; else pyV[mi]++; });
         r.proy = { v: pyV, q: pyQ };
+        // estructura del rodeo en ordeñe por tercios de lactancia (0–100, 101–200, más de 200 días) y días en leche promedio,
+        // el día 15 de cada uno de los últimos 12 meses, con los partos, secados y bajas (no depende del control lechero)
+        var LE = infLista(), est = [];
+        for (var q = 11; q >= 0; q--) {
+          var yq = +ref.slice(0, 4), mq = +ref.slice(5, 7) - q; while (mq < 1) { mq += 12; yq--; }
+          var D = yq + '-' + pad2(mq) + '-15'; if (D > ref) D = ref;
+          var E = { k: D.slice(0, 7), n: 0, t1: 0, t2: 0, t3: 0, del: 0 };
+          LE.forEach(function (x) {
+            var a = x.a, pa = x.h.pa || []; if (a.bFecha && a.bFecha <= D) return;
+            var k2 = -1; for (var z = 0; z < pa.length; z++) if (pa[z][0] <= D && !/^A/.test(pa[z][2] || '')) k2 = z; if (k2 < 0) return;
+            var p = pa[k2], np = pa[k2 + 1], seco = p[5] || (np ? A.addDays(np[0], -A.SECADO) : null);
+            if (seco && seco <= D) return;
+            var dl = A.diffDays(D, p[0]); if (dl > 600 || !enSel(unidadEn(x, D))) return;
+            E.n++; E.del += dl; if (dl <= 100) E.t1++; else if (dl <= 200) E.t2++; else E.t3++;
+          });
+          est.push(E);
+        }
+        if (est.some(function (e) { return e.n >= 20; })) r.est = est;
         // días desde la última visita de tacto, a la fecha del respaldo y a hoy
         if (r.reg && r.reg.ultT != null) r.ultTacto = r.reg.ultT;
         r.diasResp = A.diffDays(today(), ref);
@@ -5921,6 +5939,9 @@
       { k: 'lv12', g: 'Leche', t: 'Litros por vaca, últimos 12 meses', u: 'L', alto: true, d: 1, sub: function (f) { return f.reg ? f.reg.meses + ' meses con control' : ''; }, val: function (f) { return f.reg && f.reg.meses >= 10 ? f.lv12 : null; }, nota: 'Promedio de los litros por vaca de cada control de los últimos 12 meses. Solo tambos con control lechero en 10 meses o más de los 12, para que el promedio no dependa de la época del año.' },
       { k: 'l3', g: 'Rodeo', t: 'Vacas de 3ª lactancia o más', u: '%', alto: true, d: 0, val: function (f) { return f.l3; }, nota: 'Vacas en ordeñe y secas de 3ª lactancia o más, en % de las vacas: la vida productiva del rodeo.' },
       { k: 'l1', g: 'Rodeo', t: 'Primíparas en el rodeo', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.l1; }, nota: 'Vacas de 1ª lactancia en % de las vacas en ordeñe y secas.' },
+      { k: 'delP', g: 'Rodeo', t: 'Días en leche promedio', u: 'días', alto: null, neutro: true, d: 0, val: function (f) { var E = (f.est || []).filter(function (e) { return e.n >= 20; }); return E.length >= 6 ? E.reduce(function (t, e) { return t + e.del / e.n; }, 0) / E.length : null; }, nota: 'Días en leche promedio de las vacas en ordeñe, el día 15 de cada mes, promedio de los últimos 12 meses. Sale de los partos, secados y bajas, no del control.' },
+      { k: 'ter1', g: 'Rodeo', t: 'Vacas en el primer tercio (0 a 100 días)', u: '%', alto: null, neutro: true, d: 0, val: function (f) { var E = (f.est || []).filter(function (e) { return e.n >= 20; }); return E.length >= 6 ? E.reduce(function (t, e) { return t + e.t1 / e.n * 100; }, 0) / E.length : null; }, nota: '% de las vacas en ordeñe con 100 días en leche o menos, promedio de los últimos 12 meses.' },
+      { k: 'ter3', g: 'Rodeo', t: 'Vacas en el último tercio (más de 200 días)', u: '%', alto: null, neutro: true, d: 0, val: function (f) { var E = (f.est || []).filter(function (e) { return e.n >= 20; }); return E.length >= 6 ? E.reduce(function (t, e) { return t + e.t3 / e.n * 100; }, 0) / E.length : null; }, nota: '% de las vacas en ordeñe con más de 200 días en leche, promedio de los últimos 12 meses.' },
       { k: 'po', g: 'Rodeo', t: '% de vacas en ordeñe', u: '%', alto: true, d: 0, val: function (f) { return f.vo != null && f.vo + f.vs ? f.vo / (f.vo + f.vs) * 100 : null; }, nota: 'Vacas en ordeñe / (en ordeñe + secas), promedio de los últimos 12 meses.' },
       { k: 'vacas', g: 'Rodeo', t: 'Vacas (en ordeñe y secas)', u: '', alto: true, d: 0, neutro: true, val: function (f) { return f.vacas || null; }, nota: 'Tamaño del rodeo de vacas a la fecha del respaldo.' },
       { k: 'iep', g: 'Rodeo', t: 'Intervalo entre partos', u: 'días', alto: false, d: 0, val: function (f) { return f.vida && f.vida.iep; }, nota: 'Días entre partos de los partos de los últimos 2 años (Línea de vida).' },
@@ -6230,6 +6251,33 @@
         '<svg class="mchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Partos por mes: últimos 12 meses y confirmados para los próximos 12">' + defs + sv + '</svg>' +
         '<p class="cap">En cada mes, a la izquierda lo que parió en los últimos 12 meses y a la derecha (rayado) las preñeces confirmadas por tacto con parto probable en los próximos 12. Todo en % de la vaca masa promedio de los ' + nP + ' tambos. Solo lo confirmado: lo servido sin tacto no está, así que los meses más lejanos se completan a medida que se tacta.</p></section>';
     }
+    // estructura del rodeo en ordeñe por tercios de lactancia, mes a mes (toda la población, sumando los tambos)
+    function pobTercios(F) {
+      var MS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'], G = [], nT = 0;
+      for (var i = 0; i < 12; i++) G.push({ n: 0, t1: 0, t2: 0, t3: 0, del: 0 });
+      F.forEach(function (f) { if (!f.est) return; nT++; f.est.forEach(function (e) { var m = +e.k.slice(5, 7) - 1, g = G[m]; ['n', 't1', 't2', 't3', 'del'].forEach(function (q) { g[q] += e[q]; }); }); });
+      if (!nT) return '';
+      var orden = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0], W = 680, H = 240, ml = 34, mr = 36, mt = 22, mb = 30, gw = (W - ml - mr) / 12, bw = gw * 0.62;
+      var Y = function (p) { return H - mb - p / 100 * (H - mt - mb); }, dmax = 300, Yd = function (d) { return H - mb - d / dmax * (H - mt - mb); }, sv = '', pts = [];
+      for (var g = 0; g <= 100; g += 25) sv += '<line class="lgrid" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + Y(g).toFixed(1) + '" y2="' + Y(g).toFixed(1) + '"/><text class="mlbl" x="' + (ml - 5) + '" y="' + (Y(g) + 4).toFixed(1) + '" text-anchor="end">' + g + '%</text><text class="mlbl" x="' + (W - mr + 5) + '" y="' + (Y(g) + 4).toFixed(1) + '">' + Math.round(g / 100 * dmax) + '</text>';
+      orden.forEach(function (m, i) {
+        var e = G[m], x0 = ml + i * gw + (gw - bw) / 2; sv += '<text class="mlbl" x="' + (x0 + bw / 2).toFixed(1) + '" y="' + (H - mb + 15) + '" text-anchor="middle">' + MS[m] + '</text>';
+        if (!e.n) return;
+        var a = e.t1 / e.n * 100, b = e.t2 / e.n * 100, c = 100 - a - b;
+        sv += '<rect x="' + x0.toFixed(1) + '" y="' + Y(a).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (Y(0) - Y(a)).toFixed(1) + '" fill="#1D9E75"/>' +
+          '<rect x="' + x0.toFixed(1) + '" y="' + Y(a + b).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (Y(a) - Y(a + b)).toFixed(1) + '" fill="#5DCAA5"/>' +
+          '<rect x="' + x0.toFixed(1) + '" y="' + Y(100).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (Y(a + b) - Y(100)).toFixed(1) + '" fill="#C9E9DC"/>';
+        pts.push([x0 + bw / 2, e.del / e.n]);
+      });
+      sv += '<polyline fill="none" stroke="#12274A" stroke-width="2.5" stroke-linejoin="round" points="' + pts.map(function (p) { return p[0].toFixed(1) + ',' + Yd(p[1]).toFixed(1); }).join(' ') + '"/>' +
+        pts.map(function (p) { return '<circle cx="' + p[0].toFixed(1) + '" cy="' + Yd(p[1]).toFixed(1) + '" r="3" fill="#12274A"/><text class="mval" x="' + p[0].toFixed(1) + '" y="' + (Yd(p[1]) - 7).toFixed(1) + '" text-anchor="middle">' + Math.round(p[1]) + '</text>'; }).join('');
+      var tot = G.reduce(function (t, e) { return { n: t.n + e.n, del: t.del + e.del, t1: t.t1 + e.t1, t3: t.t3 + e.t3 }; }, { n: 0, del: 0, t1: 0, t3: 0 });
+      return '<section class="card ppcur"><h2>Estructura del rodeo en ordeñe · tercios de lactancia</h2>' +
+        '<div class="kpis" style="margin-bottom:8px"><div><b>' + Math.round(tot.del / tot.n) + '</b><span>Días en leche promedio</span><small>del año</small></div><div><b>' + Math.round(tot.t1 / tot.n * 100) + '%</b><span>En el primer tercio</span><small>0 a 100 días</small></div><div><b>' + Math.round(tot.t3 / tot.n * 100) + '%</b><span>En el último tercio</span><small>más de 200 días</small></div></div>' +
+        '<div class="mleg"><span><i style="background:#1D9E75"></i>0 a 100 días</span><span><i style="background:#5DCAA5"></i>101 a 200 días</span><span><i style="background:#C9E9DC"></i>más de 200 días</span><span><i style="background:#12274A;height:3px;margin-top:6px;border-radius:0"></i>días en leche promedio (escala derecha)</span></div>' +
+        '<svg class="mchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Vacas en ordeñe por tercio de lactancia y días en leche promedio, mes a mes">' + sv + '</svg>' +
+        '<p class="cap">Vacas en ordeñe el día 15 de cada mes de los últimos 12, sumando los ' + nT + ' tambos, según sus partos, secados y bajas (no hace falta control lechero). Sin secado anotado, la vaca se seca ' + A.SECADO + ' días antes del parto siguiente. Va de la mano con la curva de partos: después del pico de partos de otoño sube el primer tercio y bajan los días en leche.</p></section>';
+    }
     // secciones del panel (opción B elegida): un renglón por sección, cada una con su color (claro / oscuro)
     var PAN_SEC = [
       ['Reproducción', '#378ADD', '#185FA5', '#85B7EB', ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp', 'iep']],
@@ -6266,7 +6314,7 @@
       var tiles = '<div class="ppsum"><div><span>Tambos · vacas en ordeñe y secas</span><b>' + Object.keys(ids).length + ' · ' + nf(vac) + '</b></div><small>' + nEst + ' con servicio estacional<br>' + nTodo + ' con servicio todo el año</small></div>' +
         PAN_SEC.map(function (sec, si) {
           var h = sec[4].map(function (k) { return tile(k, sec); }).join(''); if (!h) return '';
-          return '<h3 class="ppsec" style="--sc:' + sec[1] + ';--st:' + sec[2] + ';--sd:' + sec[3] + '"><i></i>' + esc(sec[0]) + '</h3><div class="ppg">' + h + '</div>' + (si === 0 ? pobCurvaPartos(F) : '');
+          return '<h3 class="ppsec" style="--sc:' + sec[1] + ';--st:' + sec[2] + ';--sd:' + sec[3] + '"><i></i>' + esc(sec[0]) + '</h3><div class="ppg">' + h + '</div>' + (si === 0 ? pobCurvaPartos(F) + pobTercios(F) : '');
         }).join('');
       // 1) zafra en curso: promedio de los tambos de servicio estacional, semana a semana desde el inicio de servicios
       var Z = F.filter(function (f) { return !f.sTodo && f.zw && f.zw.cur.length; }), zh = '';
