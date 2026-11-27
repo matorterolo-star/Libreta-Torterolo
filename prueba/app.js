@@ -6195,6 +6195,12 @@
       return P[ind.k] || u12;
     }
     // panel de la población: cuadros con los indicadores clave (promedio y franja) y gráficos de toda la población
+    // partos de vacas de los últimos 12 meses que caen de marzo a setiembre (por tambo)
+    function Fp0() {
+      var n = function (f) { return f.pv ? f.pv.reduce(function (a, b) { return a + b; }, 0) : 0; };
+      var pct = function (f) { var t = n(f); if (t < 20 || !f.mk) return null; var e = 0; f.mk.forEach(function (k, i) { var m = +k.slice(5, 7); if (m >= 3 && m <= 9) e += f.pv[i]; }); return e / t * 100; };
+      return { n: n, pct: pct, ok: function (f) { var q = pct(f); return q != null && q >= 95; } };
+    }
     // secciones del panel (opción B elegida): un renglón por sección, cada una con su color (claro / oscuro)
     var PAN_SEC = [
       ['Reproducción', '#378ADD', '#185FA5', '#85B7EB', ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp']],
@@ -6316,9 +6322,14 @@
       if (vista === 'muestra') return '<div class="pob">' + bar + pobMuestraHTML(F) + '</div>';
       if (vista === 'panel') {
         // filtro por tipo de servicio: todos, solo estacionales o solo los que sirven todo el año
-        var tp = state.pobTipo || 'todos', Fp = F.filter(function (f) { return tp === 'todos' || (tp === 'est' ? f.sTodo === false : f.sTodo === true); });
-        var chips = '<div class="filters noprint" style="margin:0 0 10px">' + [['todos', 'Todos los tambos'], ['est', 'Servicio estacional'], ['ta', 'Servicio todo el año']].map(function (c) { return '<button class="fchip" data-a="pobtipo" data-pt="' + c[0] + '" aria-pressed="' + (tp === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div>';
-        return '<div class="pob">' + bar + chips + pobPanelHTML(Fp) + '</div>';
+        // "marzo a setiembre": tambos donde el 95% o más de los partos de vacas de los últimos 12 meses cae de marzo a setiembre
+        var MS = Fp0(F), tp = state.pobTipo || 'todos', Fp = F.filter(function (f) { return tp === 'todos' || (tp === 'ms' ? MS.ok(f) : tp === 'est' ? f.sTodo === false : f.sTodo === true); });
+        var nMS = F.filter(MS.ok).length;
+        var chips = '<div class="filters noprint" style="margin:0 0 10px">' + [['todos', 'Todos los tambos'], ['est', 'Servicio estacional'], ['ta', 'Servicio todo el año'], ['ms', 'Vacas paren solo de marzo a setiembre (' + nMS + ')']].map(function (c) { return '<button class="fchip" data-a="pobtipo" data-pt="' + c[0] + '" aria-pressed="' + (tp === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div>';
+        var lista = tp === 'ms' ? '<section class="card"><h2>Vacas que paren solo de marzo a setiembre</h2><p class="cap" style="margin-top:0">Tambos donde el 95% o más de los partos de vacas (2ª lactancia o más) de los últimos 12 meses cayó de marzo a setiembre: ' + nMS + ' de ' + F.filter(function (f) { return MS.pct(f) != null; }).length + ' tambos con 20 partos de vacas o más.</p>' +
+          (nMS ? '<div class="tblwrap"><table class="tbl tvtbl tvt3"><thead><tr><th style="text-align:left">Tambo</th><th>Partos de vacas</th><th>De marzo a setiembre</th></tr></thead><tbody>' + F.filter(MS.ok).sort(function (a, b) { return MS.pct(b) - MS.pct(a) || a.nombre.localeCompare(b.nombre, 'es'); }).map(function (f) { return '<tr><td>' + esc(f.nombre) + '</td><td>' + nf(MS.n(f)) + '</td><td>' + nf(MS.pct(f)) + '%</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="hint">Ningún tambo cumple esa condición.</p>') +
+          '<p class="cap">Los que quedan cerca (90% a 95%): ' + (F.filter(function (f) { var q = MS.pct(f); return q != null && q >= 90 && q < 95; }).map(function (f) { return esc(f.nombre) + ' (' + nf(MS.pct(f)) + '%)'; }).join(', ') || 'ninguno') + '.</p></section>' : '';
+        return '<div class="pob">' + bar + chips + lista + pobPanelHTML(Fp) + '</div>';
       }
       var p = function (n, d) { return d ? Math.round(n / d * 100) + '%' : '–'; }, v = function (x, d) { return x == null || isNaN(x) ? '–' : nf(x, d || 0); };
       var hoy = today(), viejo = function (f) { return A.diffDays(hoy, f.ref) > 60; };
