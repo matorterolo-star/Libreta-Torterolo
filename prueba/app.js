@@ -6799,6 +6799,13 @@
       document.body.classList.toggle('ancho', !!(state.pobl && esVet()));
       SHX = null;
       if (state.pobl && esVet()) {
+        // encabezado de la población: ningún tambo elegido, el resumen de toda la base
+        var Fh = POB && POB.filas ? POB.filas.filter(function (x) { return !x.sin && !x.error; }) : [], idh = {}, vh = 0;
+        Fh.forEach(function (x) { idh[x.id] = 1; vh += x.vacas || 0; });
+        $('#nombre').textContent = 'Población de tambos'; document.title = 'Libreta · población';
+        $('#logo').innerHTML = LOGO_LIBRETA; $('#logo').className = 'logo'; $('#ubtn').hidden = true;
+        $('#meta').textContent = POB && POB.cargando ? 'Calculando…' : Object.keys(idh).length + ' tambos · ' + nf(vh) + ' vacas en ordeñe y secas · ' + A.fmt(today());
+        if (nav) nav.hidden = true;
         main.innerHTML = pobHTML();
         // el tambo en la población: cada tarjeta se comparte como imagen, con el nombre del tambo elegido
         if (state.pobVista === 'tambo' && POB && POB.filas) { var fx = POB.filas.filter(function (x) { return pobKey(x) === state.pobTb; })[0] || POB.filas.filter(function (x) { return !x.sin && !x.error; }).sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); })[0]; if (fx) SHX = { nombre: fx.nombre, fecha: fx.ref }; vetCompartir(main); }
