@@ -5896,6 +5896,9 @@
       { k: 'pren', sinToro: true, g: 'Reproducción', t: 'Tasa de preñez (21 días)', u: '%', alto: true, d: 0, val: function (f) { var T = pobT(f); return T && T.aptas >= 30 ? T.pren / T.aptas * 100 : null; }, nota: 'Aptas que se preñan en el ciclo / aptas, ciclos cerrados (temporada o últimos 12 meses, según el tipo de servicio).' },
       { k: 'prenA', sinToro: true, g: 'Reproducción', t: 'Tasa de preñez año anterior', u: '%', alto: true, d: 0, val: function (f) { var T = f.sTodo ? f.T12A : f.TA; return T && T.aptas >= 30 ? T.pren / T.aptas * 100 : null; }, nota: 'La misma cuenta un año antes: la temporada pasada o los 12 meses anteriores.' },
       { k: 'vac150', cero: true, g: 'Reproducción', t: 'Vacas vacías con más de 150 días en leche', u: '%', alto: false, d: 0, val: function (f) { return f.vac150; }, nota: 'Vacas (en ordeñe y secas) sin preñez confirmada, sin descarte programado y con más de 150 días de paridas, en % de todas las vacas, a la fecha del respaldo. El problema reproductivo acumulado.' },
+      { k: 'p12V', g: 'De la preñez al parto', t: 'Partos de vacas, últimos 12 meses', u: '%', alto: true, d: 0, sub: function (f) { return f.pv ? f.pv.reduce(function (a, b) { return a + b; }, 0) + ' partos · vaca masa ' + Math.round(f.vm) : ''; }, val: function (f) { return f.pv && f.vm >= 20 ? f.pv.reduce(function (a, b) { return a + b; }, 0) / f.vm * 100 : null; }, nota: 'Partos de vacas (2ª lactancia o más, sin abortos) de los últimos 12 meses en % de la vaca masa promedio (ordeñe + secas) de esos meses: la misma cuenta que la tarjeta Partos de cada tambo. En los tambos estacionales es la cosecha de la zafra pasada.' },
+      { k: 'p12Q', g: 'De la preñez al parto', t: 'Partos de vaquillonas, últimos 12 meses', u: '%', alto: null, neutro: true, d: 0, sub: function (f) { return f.pq ? f.pq.reduce(function (a, b) { return a + b; }, 0) + ' partos' : ''; }, val: function (f) { return f.pq && f.vm >= 20 ? f.pq.reduce(function (a, b) { return a + b; }, 0) / f.vm * 100 : null; }, nota: 'Partos de vaquillonas (primer parto) de los últimos 12 meses en % de la vaca masa promedio: la reposición que entró.' },
+      { k: 'p12T', g: 'De la preñez al parto', t: 'Partos totales, últimos 12 meses', u: '%', alto: true, d: 0, val: function (f) { return f.pv && f.pq && f.vm >= 20 ? (f.pv.reduce(function (a, b) { return a + b; }, 0) + f.pq.reduce(function (a, b) { return a + b; }, 0)) / f.vm * 100 : null; }, nota: 'Vacas más vaquillonas paridas en los últimos 12 meses en % de la vaca masa promedio.' },
       { k: 'ppPar', g: 'De la preñez al parto', t: 'Preñeces que terminaron en parto', u: '%', alto: true, d: 0, sub: function (f) { return f.pp ? f.pp.par + ' partos de ' + f.pp.n + ' preñeces confirmadas' : ''; }, val: function (f) { return f.pp ? f.pp.par / f.pp.n * 100 : null; }, nota: 'Preñeces confirmadas por tacto (vacas y vaquillonas) con parto esperado (concepción + 283 días) en el último ejercicio cerrado, el mismo de los partos de multíparas: cuántas parieron (parto entre 240 y 320 días de la concepción).' },
       { k: 'ppPer', cero: true, g: 'De la preñez al parto', t: 'Preñeces perdidas', u: '%', alto: false, d: 1, val: function (f) { return f.pp ? (f.pp.ab + f.pp.perd) / f.pp.n * 100 : null; }, nota: 'De esas preñeces: abortos anotados más las que quedaron vacías después del tacto (tacto vacía o un servicio nuevo antes del parto).' },
       { k: 'ppAb', cero: true, g: 'De la preñez al parto', t: 'Abortos anotados', u: '%', alto: false, d: 1, val: function (f) { return f.pp ? f.pp.ab / f.pp.n * 100 : null; }, nota: 'De esas preñeces, las que tienen un aborto anotado.' },
@@ -6195,7 +6198,7 @@
     // secciones del panel (opción B elegida): un renglón por sección, cada una con su color (claro / oscuro)
     var PAN_SEC = [
       ['Reproducción', '#378ADD', '#185FA5', '#85B7EB', ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp']],
-      ['De la preñez al parto', '#BA7517', '#854F0B', '#EF9F27', ['ppPar', 'ppPer', 'ppBaj', 'ppSin']],
+      ['De la preñez al parto', '#BA7517', '#854F0B', '#EF9F27', ['p12V', 'p12Q', 'p12T', 'ppPar', 'ppPer', 'ppBaj', 'ppSin']],
       ['Leche', '#1D9E75', '#0F6E56', '#5DCAA5', ['lv12', 'pers']],
       ['Recría y vaquillonas', '#7F77DD', '#534AB7', '#AFA9EC', ['e1p', 'p24']],
       ['Rodeo', '#888780', '#5F5E5A', '#B4B2A9', ['ejM', 'l3', 'iep']],
@@ -6311,7 +6314,12 @@
       if (vista === 'gen') return '<div class="pob">' + bar + pobGenHTML(F) + '</div>';
       if (vista === 'tambo') return '<div class="pob">' + bar + pobTamboHTML(F) + '</div>';
       if (vista === 'muestra') return '<div class="pob">' + bar + pobMuestraHTML(F) + '</div>';
-      if (vista === 'panel') return '<div class="pob">' + bar + pobPanelHTML(F) + '</div>';
+      if (vista === 'panel') {
+        // filtro por tipo de servicio: todos, solo estacionales o solo los que sirven todo el año
+        var tp = state.pobTipo || 'todos', Fp = F.filter(function (f) { return tp === 'todos' || (tp === 'est' ? f.sTodo === false : f.sTodo === true); });
+        var chips = '<div class="filters noprint" style="margin:0 0 10px">' + [['todos', 'Todos los tambos'], ['est', 'Servicio estacional'], ['ta', 'Servicio todo el año']].map(function (c) { return '<button class="fchip" data-a="pobtipo" data-pt="' + c[0] + '" aria-pressed="' + (tp === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div>';
+        return '<div class="pob">' + bar + chips + pobPanelHTML(Fp) + '</div>';
+      }
       var p = function (n, d) { return d ? Math.round(n / d * 100) + '%' : '–'; }, v = function (x, d) { return x == null || isNaN(x) ? '–' : nf(x, d || 0); };
       var hoy = today(), viejo = function (f) { return A.diffDays(hoy, f.ref) > 60; };
       var Tt = { aptas: 0, serv: 0, pren: 0, sOk: 0, sMal: 0 }, TAt = { aptas: 0, pren: 0 }, vac = 0;
@@ -7281,6 +7289,7 @@
       else if (a === 'pobpdf') pdfPob();
       else if (a === 'pobcerrar') { state.pobl = false; if (state.pobIni) { state.pobIni = false; state.inicio = true; } render(); window.scrollTo(0, 0); }
       else if (a === 'pobcalc') pobCalc();
+      else if (a === 'pobtipo') { state.pobTipo = b.dataset.pt; render(); }
       else if (a === 'pobir') { state.pobVista = 'rank'; state.pobGr = b.dataset.g || ''; render(); window.scrollTo(0, 0); }
       else if (a === 'base') exportarBase();
       else if (a === 'vetclave') copiarClaveVet();
