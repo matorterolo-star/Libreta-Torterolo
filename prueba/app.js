@@ -5639,6 +5639,8 @@
         // tasas de 21 días de los últimos 12 meses (ciclos cerrados), para los tambos que sirven todo el año
         r.T12 = suma(A.ciclos21(an, esPren, A.addDays(ref, -364), pev, ref));
         if (A.addDays(ref, -729) >= (DB.desdeHist != null ? DB.desdeHist : A.addDays(ref, -730))) r.T12A = suma(A.ciclos21(an, esPren, A.addDays(ref, -729), pev, A.addDays(ref, -365)));
+        // concepción de más de 65%: casi seguro toro sin anotar; sale de los indicadores de servicios como los marcados con toro
+        var Tq = r.sTodo ? r.T12 : r.T; if (Tq && Tq.sOk + Tq.sMal >= 20 && Tq.sOk / (Tq.sOk + Tq.sMal) > 0.65) { r.toroAuto = true; r.toroConc = Tq.sOk / (Tq.sOk + Tq.sMal) * 100; }
         r.vacas = DB.animales.filter(function (a) { return !a.cat || a.cat === 'vaca' || a.cat === 'seca'; }).length;
         var D = infDatos('12'); r.ips = D.ips; r.ipp = D.ipp; r.spp = D.spp; r.pg = D.pg; r.vo = D.avo; r.vs = D.avs; r.vm = D.avm;
         r.mk = D.M.map(function (m) { return m.key; }); r.pv = D.pv; r.pq = D.pq; r.best = D.best;
@@ -5724,6 +5726,21 @@
           mast: G.mast, san: G.san, celos: G.celos, serv: G.serv, tactos: vis2.length, tInt: iv.length ? iv[Math.floor(iv.length / 2)] : null,
           ultT: vis2.length ? A.diffDays(ref, vis2[vis2.length - 1]) : null,
           vaq: DB.animales.filter(function (a) { return a.cat === 'vaquillona' || a.cat === 'ternera'; }).length };
+      } catch (e) {}
+      // bajas de vacas (muertes, ventas) de los últimos 12 meses, abortos, y terneras nacidas (con 90 días de seguimiento) y muertas
+      try {
+        var dB = A.addDays(ref, -365), hs3 = A.addDays(ref, -90), hd3 = A.addDays(hs3, -365), B = { mu: 0, ve: 0, ot: 0, ab: {}, pa: 0, nac: 0, nacM: 0, nacH: 0 };
+        infLista().forEach(function (x) {
+          var a = x.a, h = x.h, pa = h.pa || [], b = a.bFecha;
+          if (b && b > dB && b <= ref && pa.length && pa[0][0] < b && enSel(unidadEn(x, b))) { if (a.bTipo === 'muerte') B.mu++; else if (a.bTipo === 'venta') B.ve++; else B.ot++; }
+          pa.forEach(function (p) {
+            if (p[0] > dB && p[0] <= ref && enSel(unidadEn(x, p[0]))) { if (/^A/.test(p[2] || '')) B.ab[x.a.rp + p[0].slice(0, 7)] = 1; else B.pa++; }
+            if (p[0] > hd3 && p[0] <= hs3 && !/^A/.test(p[2] || '') && enSel(unidadEn(x, p[0]))) B.nacH += (String(p[2] || '').match(/H/g) || []).length;
+          });
+          (h.ab || []).forEach(function (f2) { if (f2 > dB && f2 <= ref && enSel(unidadEn(x, f2))) B.ab[x.a.rp + f2.slice(0, 7)] = 1; });
+          if (h.fn && h.fn > hd3 && h.fn <= hs3 && (!pa.length || pa[0][0] > h.fn) && enSel(unidadEn(x, h.fn))) { B.nac++; if (b && a.bTipo === 'muerte' && A.diffDays(b, h.fn) <= 90) B.nacM++; }
+        });
+        B.nAb = Object.keys(B.ab).length; delete B.ab; r.baj = B;
       } catch (e) {}
       // mastitis: la misma cuenta que la tarjeta de Leche (casos y vacas tratadas en los últimos 12 meses)
       try { POBX = {}; mastitisHTML(); if (POBX.mast) r.mast = POBX.mast; } catch (e) {} finally { POBX = null; }
@@ -5814,27 +5831,32 @@
       { k: 'iep', g: 'Rodeo', t: 'Intervalo entre partos', u: 'días', alto: false, d: 0, val: function (f) { return f.vida && f.vida.iep; }, nota: 'Días entre partos de los partos de los últimos 2 años (Línea de vida).' },
       { k: 'seca', g: 'Rodeo', t: 'Días de seca', u: 'días', alto: null, d: 0, neutro: true, val: function (f) { return f.vida && f.vida.seca; }, nota: 'Promedio del cierre de la lactancia al parto siguiente, partos de los últimos 2 años. Lo ideal es 50 a 60.' },
       { k: 'secaOk', g: 'Rodeo', t: 'Secas con 50 a 60 días', u: '%', alto: true, d: 0, val: function (f) { return f.vida && f.vida.secaOk; }, nota: '% de los períodos secos en el óptimo (50 a 60 días).' },
+      { k: 'muV', cero: true, g: 'Bajas', t: 'Mortandad de vacas', u: '%', alto: false, d: 1, val: function (f) { return f.baj && f.vm >= 20 ? f.baj.mu / f.vm * 100 : null; }, nota: 'Vacas (con al menos un parto) muertas en los últimos 12 meses en % de la vaca masa promedio (ordeñe + secas).' },
+      { k: 'veV', g: 'Bajas', t: 'Vacas vendidas', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.baj && f.vm >= 20 ? f.baj.ve / f.vm * 100 : null; }, nota: 'Vacas vendidas en los últimos 12 meses en % de la vaca masa promedio.' },
+      { k: 'repo', g: 'Bajas', t: 'Salidas de vacas (reposición necesaria)', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.baj && f.vm >= 20 ? (f.baj.mu + f.baj.ve + f.baj.ot) / f.vm * 100 : null; }, nota: 'Todas las vacas que salieron (muertas, vendidas u otras bajas) en los últimos 12 meses en % de la vaca masa: las vaquillonas que hacen falta para mantener el rodeo.' },
+      { k: 'abo', g: 'Bajas', t: 'Abortos', u: '%', alto: false, d: 1, val: function (f) { return f.baj && f.baj.pa + f.baj.nAb >= 30 ? f.baj.nAb / (f.baj.pa + f.baj.nAb) * 100 : null; }, nota: 'Abortos anotados en los últimos 12 meses / (partos + abortos). Depende de que se anoten.' },
+      { k: 'mTer', g: 'Bajas', t: 'Mortandad de terneras hasta 90 días', u: '%', alto: false, d: 1, sub: function (f) { return f.baj ? f.baj.nac + ' terneras registradas de ' + f.baj.nacH + ' partos de hembra' : ''; }, val: function (f) { var B = f.baj; return B && B.nacH >= 10 && B.nac >= 10 && B.nac >= B.nacH * 0.5 ? B.nacM / B.nac * 100 : null; }, nota: 'Terneras nacidas entre 15 y 3 meses atrás (con 90 días de seguimiento) que murieron antes de los 90 días / terneras nacidas registradas. Solo tambos que registran al nacer al menos la mitad de las hembras paridas.' },
       { k: 'ejM', g: 'Rodeo', t: 'Partos de multíparas, último ejercicio', u: '%', alto: true, d: 0, sub: function (f) { return f.ej && f.ej[0] ? 'Ejercicio ' + f.ej[0].lbl + ' · ' + f.ej[0].nM + ' partos' : ''; }, val: function (f) { return f.ej && f.ej[0] ? f.ej[0].pm : null; }, nota: 'Partos de vacas (2ª lactancia o más, sin abortos) del último ejercicio cerrado (julio a junio) en % de la vaca masa promedio (ordeñe + secas) de ese ejercicio.' },
       { k: 'ejMA', g: 'Rodeo', t: 'Partos de multíparas, ejercicio anterior', u: '%', alto: true, d: 0, sub: function (f) { return f.ej && f.ej[1] ? 'Ejercicio ' + f.ej[1].lbl + ' · ' + f.ej[1].nM + ' partos' : ''; }, val: function (f) { return f.ej && f.ej[1] ? f.ej[1].pm : null; }, nota: 'La misma cuenta en el ejercicio anterior.' },
-      { k: 'ejMD', g: 'Rodeo', t: 'Partos de multíparas, evolución', u: 'puntos', alto: true, d: 0, val: function (f) { return f.ej && f.ej[0] && f.ej[1] ? f.ej[0].pm - f.ej[1].pm : null; }, nota: 'Último ejercicio menos el anterior, en puntos de % de la vaca masa.' },
-      { k: 'ejP', g: 'Rodeo', t: 'Partos de primíparas, último ejercicio', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.ej && f.ej[0] ? f.ej[0].pp : null; }, nota: 'Partos de vaquillonas del último ejercicio en % de la vaca masa promedio: la reposición que entró.' },
-      { k: 'salT', g: 'Rodeo', t: 'Salidas tempranas', u: '%', alto: false, d: 1, val: function (f) { return f.salT; }, nota: 'Partos de los últimos 12 meses (con 60 días de seguimiento) de vacas vendidas o muertas antes de los 60 días de paridas. Hasta 5% bien, más de 8% problema.' },
+      { k: 'ejMD', cero: true, g: 'Rodeo', t: 'Partos de multíparas, evolución', u: 'puntos', alto: true, d: 0, val: function (f) { return f.ej && f.ej[0] && f.ej[1] ? f.ej[0].pm - f.ej[1].pm : null; }, nota: 'Último ejercicio menos el anterior, en puntos de % de la vaca masa.' },
+      { k: 'ejP', cero: true, g: 'Rodeo', t: 'Partos de primíparas, último ejercicio', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.ej && f.ej[0] ? f.ej[0].pp : null; }, nota: 'Partos de vaquillonas del último ejercicio en % de la vaca masa promedio: la reposición que entró.' },
+      { k: 'salT', cero: true, g: 'Rodeo', t: 'Salidas tempranas', u: '%', alto: false, d: 1, val: function (f) { return f.salT; }, nota: 'Partos de los últimos 12 meses (con 60 días de seguimiento) de vacas vendidas o muertas antes de los 60 días de paridas. Hasta 5% bien, más de 8% problema.' },
       { k: 'salEdad', g: 'Rodeo', t: 'Edad a la salida del tambo', u: 'años', alto: true, d: 1, val: function (f) { return f.vida && f.vida.salEdad; }, nota: 'Edad promedio de las vacas vendidas o muertas en los últimos 2 años.' },
       { k: 'salLac', g: 'Rodeo', t: 'Lactancias a la salida', u: '', alto: true, d: 1, val: function (f) { return f.vida && f.vida.salLac; }, nota: 'Lactancias promedio de las vacas que salieron del tambo en los últimos 2 años.' },
       { k: 'zPren', g: 'Cierre de zafra', t: 'Preñez total de la zafra', u: '%', alto: true, d: 0, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.n ? R.pren / R.n * 100 : null; }, nota: 'Solo tambos de servicio estacional. Última zafra terminada (Comparar zafras): vacas preñadas / vacas de la zafra. Las vendidas o muertas vacías cuentan como no preñadas.' },
       { k: 'z150', g: 'Cierre de zafra', t: 'Preñadas a 150 días en leche', u: '%', alto: true, d: 0, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.n150 >= 30 ? R.ok150 / R.n150 * 100 : null; }, nota: 'Vacas que cumplieron 150 días en leche en la zafra y se preñaron antes.' },
       { k: 'zConc', sinToro: true, g: 'Cierre de zafra', t: 'Concepción de la zafra', u: '%', alto: true, d: 0, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.sRes >= 30 ? R.sOk / R.sRes * 100 : null; }, nota: 'Servicios que preñaron / servicios con resultado en la zafra.' },
       { k: 'zIpc', g: 'Cierre de zafra', t: 'Parto – concepción en la zafra', u: 'días', alto: false, d: 0, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.pren >= 20 ? R.ipc : null; }, nota: 'Días promedio de las vacas preñadas en la zafra; leelo junto con la preñez total.' },
-      { k: 'zPerd', g: 'Cierre de zafra', t: 'Pérdida de preñez', u: '%', alto: false, d: 1, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.conf >= 20 ? R.perd / R.conf * 100 : null; }, nota: 'Preñeces confirmadas por tacto que se perdieron después (aborto o tacto vacía).' },
-      { k: 'zExc', g: 'Cierre de zafra', t: 'Excluidas de la zafra', u: '%', alto: false, d: 0, neutro: true, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.n0 ? (R.desc + R.antes + (R.pase || 0)) / R.n0 * 100 : null; }, nota: 'Descartes programados y vacas que se fueron antes de la espera voluntaria, sobre todas las vacas de la zafra.' },
-      { k: 'zDif', g: 'Cierre de zafra', t: 'Zafra actual contra la anterior', u: 'puntos', alto: true, d: 0, val: function (f) { return !f.sTodo && f.zDif ? f.zDif.d : null; }, nota: 'Preñez acumulada de la zafra en curso menos la de la zafra anterior en la misma semana de servicios. No entra si faltan tactar servicios (más de 5 puntos entre lo confirmado y lo posible).' },
+      { k: 'zPerd', cero: true, g: 'Cierre de zafra', t: 'Pérdida de preñez', u: '%', alto: false, d: 1, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.conf >= 20 ? R.perd / R.conf * 100 : null; }, nota: 'Preñeces confirmadas por tacto que se perdieron después (aborto o tacto vacía).' },
+      { k: 'zExc', cero: true, g: 'Cierre de zafra', t: 'Excluidas de la zafra', u: '%', alto: false, d: 0, neutro: true, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.n0 ? (R.desc + R.antes + (R.pase || 0)) / R.n0 * 100 : null; }, nota: 'Descartes programados y vacas que se fueron antes de la espera voluntaria, sobre todas las vacas de la zafra.' },
+      { k: 'zDif', cero: true, g: 'Cierre de zafra', t: 'Zafra actual contra la anterior', u: 'puntos', alto: true, d: 0, val: function (f) { return !f.sTodo && f.zDif ? f.zDif.d : null; }, nota: 'Preñez acumulada de la zafra en curso menos la de la zafra anterior en la misma semana de servicios. No entra si faltan tactar servicios (más de 5 puntos entre lo confirmado y lo posible).' },
       { k: 'e1s', g: 'Recría y vaquillonas', t: 'Edad al primer servicio', u: 'meses', alto: false, d: 1, val: function (f) { return f.vida && f.vida.e1s; }, nota: 'Vaquillonas que parieron en los últimos 2 años (Línea de vida).' },
       { k: 'e1p', g: 'Recría y vaquillonas', t: 'Edad al primer parto', u: 'meses', alto: false, d: 1, val: function (f) { return f.vida && f.vida.e1p; }, nota: 'Vaquillonas que parieron en los últimos 2 años. Si el tambo no tiene las vaquillonas cargadas, no hay dato.' },
       { k: 'vC1', g: 'Recría y vaquillonas', t: 'Concepción 1er servicio vaquillonas', u: '%', alto: true, d: 0, val: function (f) { return f.vaq && f.vaq.c1; }, nota: 'Última zafra completa de vaquillonas (1 de mayo al 30 de abril).' },
       { k: 'vPren', g: 'Recría y vaquillonas', t: 'Preñez de vaquillonas servidas', u: '%', alto: true, d: 0, val: function (f) { return f.vaq && f.vaq.pren; }, nota: 'Vaquillonas preñadas / servidas en la última zafra completa (sin las que se fueron).' },
-      { k: 'mInc', g: 'Mastitis', t: 'Casos cada 100 vacas por año', u: '', alto: false, d: 0, val: function (f) { return f.mast && f.mast.inc; }, nota: 'Casos de mastitis en los últimos 12 meses cada 100 vacas en ordeñe. Meta menos de 24 (Michigan); alerta desde 35 (AHDB). Solo tambos que anotan mastitis: uno que anota poco sale mejor de lo que es.' },
-      { k: 'mPv', g: 'Mastitis', t: 'Vacas tratadas', u: '%', alto: false, d: 0, val: function (f) { return f.mast && f.mast.pv; }, nota: 'Vacas con al menos un caso / todas las vacas que pasaron por el ordeñe en los últimos 12 meses.' },
-      { k: 'mRep', g: 'Mastitis', t: 'Casos repetidos', u: '%', alto: false, d: 0, val: function (f) { return f.mast && f.mast.rep; }, nota: 'Casos en una vaca que ya tuvo mastitis en esa lactancia. Meta menos de 20% (Michigan).' }
+      { k: 'mInc', cero: true, g: 'Mastitis', t: 'Casos cada 100 vacas por año', u: '', alto: false, d: 0, val: function (f) { return f.mast && f.mast.inc; }, nota: 'Casos de mastitis en los últimos 12 meses cada 100 vacas en ordeñe. Meta menos de 24 (Michigan); alerta desde 35 (AHDB). Solo tambos que anotan mastitis: uno que anota poco sale mejor de lo que es.' },
+      { k: 'mPv', cero: true, g: 'Mastitis', t: 'Vacas tratadas', u: '%', alto: false, d: 0, val: function (f) { return f.mast && f.mast.pv; }, nota: 'Vacas con al menos un caso / todas las vacas que pasaron por el ordeñe en los últimos 12 meses.' },
+      { k: 'mRep', cero: true, g: 'Mastitis', t: 'Casos repetidos', u: '%', alto: false, d: 0, val: function (f) { return f.mast && f.mast.rep; }, nota: 'Casos en una vaca que ya tuvo mastitis en esa lactancia. Meta menos de 20% (Michigan).' }
     ];
     // tambos o unidades con toro suelto en el rodeo (los marca el veterinario): sus servicios no están todos anotados,
     // así que no entran en los indicadores que dependen de los servicios (sinToro)
@@ -5845,24 +5867,35 @@
     function pobToroSet(k, on) { var T = pobToro(); if (on) T[k] = 1; else delete T[k]; try { localStorage.setItem('libreta:pobtoro', JSON.stringify(T)); } catch (e) {} }
     // percentil con interpolación (p entre 0 y 1) de una lista ordenada
     function pctl(o, p) { if (!o.length) return null; var i = (o.length - 1) * p, a = Math.floor(i), b = Math.ceil(i); return o[a] + (o[b] - o[a]) * (i - a); }
+    // estadística de un indicador: quedan afuera (se listan aparte, no entran en promedio ni cuartiles)
+    // - con toro: marcados por el veterinario o con concepción de más de 65% (casi seguro toro sin anotar), en los indicadores de servicios
+    // - en cero, en los indicadores donde 0 no tiene sentido (falta de registro)
+    // - atípicos (regla de Tukey): más de 1,5 veces el rango intercuartil por fuera del 25%–75%, con 8 tambos o más
     function pobStats(F, ind) {
-      var TT = ind.sinToro ? pobToro() : {}, fuera = [];
-      var L = F.map(function (f) { return { f: f, x: ind.val(f) }; }).filter(function (z) { if (z.x == null || isNaN(z.x)) return false; if (TT[pobKey(z.f)]) { fuera.push(z); return false; } return true; });
+      var TT = ind.sinToro ? pobToro() : {}, fuera = [], ex = [];
+      var L = F.map(function (f) { return { f: f, x: ind.val(f) }; }).filter(function (z) {
+        if (z.x == null || isNaN(z.x)) return false;
+        if (ind.sinToro && (TT[pobKey(z.f)] || z.f.toroAuto)) { z.mot = TT[pobKey(z.f)] ? 'toro' : 'toro probable'; fuera.push(z); return false; }
+        if (!ind.cero && Math.abs(z.x) < 0.05) { z.mot = 'en cero'; ex.push(z); return false; }
+        return true;
+      });
       var o = L.map(function (z) { return z.x; }).sort(function (a, b) { return a - b; });
       var q1 = pctl(o, .25), q3 = pctl(o, .75), iq = q3 - q1;
-      // valor atípico (regla de Tukey): más de 1,5 veces el rango intercuartil por fuera del 25%–75%; se avisa, no se saca
-      if (o.length >= 8 && iq > 0) L.forEach(function (z) { z.atip = z.x < q1 - 1.5 * iq || z.x > q3 + 1.5 * iq; });
-      return { L: L.sort(function (a, b) { return ind.alto ? b.x - a.x : a.x - b.x; }), fuera: fuera, n: o.length, prom: o.length ? o.reduce(function (s, x) { return s + x; }, 0) / o.length : null, min: o[0], max: o[o.length - 1], p25: q1, med: pctl(o, .5), p75: q3 };
+      if (o.length >= 8 && iq > 0) L = L.filter(function (z) { if (z.x < q1 - 1.5 * iq || z.x > q3 + 1.5 * iq) { z.atip = true; z.mot = 'atípico'; ex.push(z); return false; } return true; });
+      o = L.map(function (z) { return z.x; }).sort(function (a, b) { return a - b; });
+      var ord = function (a, b) { return ind.alto ? b.x - a.x : a.x - b.x; };
+      return { L: L.sort(ord), fuera: fuera, ex: ex.sort(ord), n: o.length, prom: o.length ? o.reduce(function (s2, x) { return s2 + x; }, 0) / o.length : null, min: o[0], max: o[o.length - 1], p25: pctl(o, .25), med: pctl(o, .5), p75: pctl(o, .75) };
     }
     // sin la unidad (va en el nombre del indicador), para la tabla compacta del informe general
     function pobNum(x, ind) { return x == null || isNaN(x) ? '–' : nf(x, ind.d, ind.d); }
     function pobTit(ind) { return ind.t + (ind.u ? ' (' + ind.u + ')' : ''); }
     function pobFmt(x, ind) { return x == null || isNaN(x) ? '–' : (ind.u === 'puntos' && x > 0.5 ? '+' : '') + nf(x, ind.d, ind.d) + (ind.u === '%' ? '%' : ind.u ? ' ' + ind.u : ''); }
     function pobToroHTML(F) {
-      var T = pobToro(), n = F.filter(function (f) { return T[pobKey(f)]; }).length;
+      var T = pobToro(), n = F.filter(function (f) { return T[pobKey(f)] || f.toroAuto; }).length;
       return '<details class="nota"' + (state.pobToroAb ? ' open' : '') + '><summary>Tambos con toro en el rodeo' + (n ? ' (' + n + ')' : '') + '</summary>' +
         '<p class="cap">Marcá los que tienen toro suelto: no entran en tasa de servicio (de la temporada y de los primeros 3 ciclos), concepción, tasa de preñez (esta temporada y la anterior), servicios por preñez ni intervalo parto–1er servicio, porque los servicios del toro no se anotan. Sí entran en intervalo parto–preñez, % preñez general, leche y rodeo.</p>' +
-        F.slice().sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); }).map(function (f) { var k = pobKey(f); return '<label class="uopt"><input type="checkbox" class="pobToro" data-toro="' + esc(k) + '"' + (T[k] ? ' checked' : '') + '><b>' + esc(f.nombre) + '</b></label>'; }).join('') + '</details>';
+        (F.some(function (f) { return f.toroAuto; }) ? '<p class="cap">Además quedan afuera solos, como toro probable, los que tienen concepción de más de 65%: ' + F.filter(function (f) { return f.toroAuto; }).map(function (f) { return esc(f.nombre) + ' (' + Math.round(f.toroConc) + '%)'; }).join(', ') + '.</p>' : '') +
+        F.slice().sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); }).map(function (f) { var k = pobKey(f); return '<label class="uopt"><input type="checkbox" class="pobToro" data-toro="' + esc(k) + '"' + (T[k] ? ' checked' : '') + '><b>' + esc(f.nombre) + '</b>' + (f.toroAuto ? '<span>toro probable: concepción ' + Math.round(f.toroConc) + '%</span>' : '') + '</label>'; }).join('') + '</details>';
     }
     // ranking: modo 'anon' (sin nombres), 'nombres' (todos) o el id de un tambo (solo se ve ese nombre)
     function pobRankHTML(F) {
@@ -5882,7 +5915,7 @@
         res = '<section class="card rkres"><h2>' + esc(tambos[sel]) + ' en la población</h2><div class="tblwrap"><table class="tbl"><thead><tr><th>Indicador</th>' + mios.map(function (f) { return '<th>' + esc(f.nombre.split(' · ')[1] || 'Valor') + '</th>'; }).join('') + '<th>Población</th></tr></thead><tbody>' +
           INDS.filter(function (i) { return !i.neutro; }).map(function (ind) {
             var S = pobStats(F, ind);
-            return '<tr><td>' + esc(ind.t) + '</td>' + mios.map(function (f) { var k = -1; S.L.forEach(function (z, j) { if (z.f === f) k = j; }); var fu = S.fuera.filter(function (z) { return z.f === f; })[0]; return '<td>' + (k < 0 ? (fu ? pobFmt(fu.x, ind) + '<small>con toro, no entra</small>' : '–') : '<b>' + pobFmt(S.L[k].x, ind) + (S.L[k].atip ? ' ⚠' : '') + '</b><small>' + (k + 1) + '° de ' + S.n + '</small>') + '</td>'; }).join('') + '<td>' + pobFmt(S.prom, ind) + '</td></tr>';
+            return '<tr><td>' + esc(ind.t) + '</td>' + mios.map(function (f) { var k = -1; S.L.forEach(function (z, j) { if (z.f === f) k = j; }); var fu = S.fuera.concat(S.ex).filter(function (z) { return z.f === f; })[0]; return '<td>' + (k < 0 ? (fu ? pobFmt(fu.x, ind) + '<small>' + fu.mot + ', no entra</small>' : '–') : '<b>' + pobFmt(S.L[k].x, ind) + (S.L[k].atip ? ' ⚠' : '') + '</b><small>' + (k + 1) + '° de ' + S.n + '</small>') + '</td>'; }).join('') + '<td>' + pobFmt(S.prom, ind) + '</td></tr>';
           }).join('') + '</tbody></table></div><p class="cap">Puesto entre los tambos o unidades con dato en cada indicador (1° = el mejor).</p></section>';
       }
       var cards = INDS.map(function (ind) {
@@ -5893,9 +5926,11 @@
           S.L.map(function (z, j) {
             var mio = sel && String(z.f.id) === String(sel), n = nom(z.f);
             return '<div class="rkr' + (mio ? ' mio' : '') + '"><span class="rkp">' + (j + 1) + '°</span><span class="rkn">' + n + '</span><span class="rkb"><i style="width:' + pos(z.x).toFixed(1) + '%"></i><em style="left:' + pos(S.prom).toFixed(1) + '%"></em></span><span class="rkv">' + (z.atip ? '<span class="rkat" title="Valor atípico">⚠</span>' : '') + pobFmt(z.x, ind) + '</span></div>';
-          }).join('') + '</div><p class="cap rkpie"><span class="rkleg"></span> Promedio de la población: <b>' + pobFmt(S.prom, ind) + '</b> · ' + S.n + ' tambos o unidades con dato' +
-          (S.fuera.length ? ' · no entran ' + S.fuera.length + ' con toro en el rodeo' + (function () { var vis = S.fuera.filter(function (z) { return nom(z.f); }); return vis.length ? ' (' + vis.map(function (z) { return nom(z.f) + ': ' + pobFmt(z.x, ind); }).join(', ') + ')' : ''; })() : '') +
-          (S.L.some(function (z) { return z.atip; }) ? '<br>⚠ Valor atípico: muy alejado del resto (más de 1,5 veces el rango del 25%–75% por fuera de ese rango). Conviene revisar si es real o un problema de registro.' : '') + '</p></section>';
+          }).join('') + S.fuera.concat(S.ex).map(function (z) {
+            var mio = sel && String(z.f.id) === String(sel), n = nom(z.f);
+            return '<div class="rkr rkx' + (mio ? ' mio' : '') + '" style="opacity:.55"><span class="rkp">–</span><span class="rkn">' + n + '</span><span class="rkb"><i style="width:' + pos(z.x).toFixed(1) + '%;background:var(--muted)"></i></span><span class="rkv"><span class="rkat" title="' + z.mot + '">⚠</span>' + pobFmt(z.x, ind) + '<small style="display:block;font-size:10.5px;font-weight:500">' + z.mot + '</small></span></div>';
+          }).join('') + '</div><p class="cap rkpie"><span class="rkleg"></span> Promedio de la población: <b>' + pobFmt(S.prom, ind) + '</b> · ' + S.n + ' tambos o unidades en la estadística' +
+          (S.fuera.length + S.ex.length ? '<br>⚠ Quedan afuera (al final, en gris) ' + (S.fuera.length + S.ex.length) + ': ' + [[S.fuera.filter(function (z) { return z.mot === 'toro'; }).length, 'con toro marcado'], [S.fuera.filter(function (z) { return z.mot === 'toro probable'; }).length, 'con concepción de más de 65% (toro probable)'], [S.ex.filter(function (z) { return z.mot === 'en cero'; }).length, 'en cero (falta de registro)'], [S.ex.filter(function (z) { return z.atip; }).length, 'atípicos (muy alejados del resto: más de 1,5 veces el rango del 25%–75% por fuera de ese rango)']].filter(function (q) { return q[0]; }).map(function (q) { return q[0] + ' ' + q[1]; }).join(', ') + '. No entran en el promedio ni en los rangos.' : '') + '</p></section>';
       }).join('');
       return ctrl + '<section class="card rkhead"><h2>Población de tambos · ranking por indicador</h2><p class="cap">' + (gr ? esc(gr) + ' · ' : '') + F.length + ' tambos o unidades · ' + (sel ? 'se muestra solo ' + esc(tambos[sel]) : modo === 'nombres' ? 'con nombres' : 'anónimo') + ' · ' + A.fmt(today()) + '</p></section>' + res + cards + '<p class="ifirma">Dr. Mauro Torterolo</p>';
     }
@@ -5910,8 +5945,8 @@
             POB_IND.filter(function (i) { return i.g === g; }).map(function (ind) {
               var S = pobStats(F, ind); if (!S.n) return '<tr><td>' + esc(pobTit(ind)) + '</td><td colspan="5">Sin datos</td></tr>';
               var mej = ind.alto ? S.p75 : S.p25, peo = ind.alto ? S.p25 : S.p75;
-              var nat = S.L.filter(function (z) { return z.atip; }).length;
-              return '<tr><td>' + esc(pobTit(ind)) + '<small>' + S.n + ' con dato' + (S.fuera.length ? ' · ' + S.fuera.length + ' con toro no entra' + (S.fuera.length === 1 ? '' : 'n') : '') + (nat ? ' · ⚠ ' + nat + ' atípico' + (nat === 1 ? '' : 's') : '') + '</small></td><td><b>' + pobNum(S.prom, ind) + '</b></td><td>' + pobNum(S.med, ind) + '</td><td>' + (ind.neutro ? '–' : pobNum(mej, ind)) + '</td><td>' + (ind.neutro ? '–' : pobNum(peo, ind)) + '</td><td class="nw">' + pobNum(S.min, ind) + '–' + pobNum(S.max, ind) + '</td></tr>';
+              var nat = S.ex.length;
+              return '<tr><td>' + esc(pobTit(ind)) + '<small>' + S.n + ' en la estadística' + (S.fuera.length ? ' · ' + S.fuera.length + ' con toro' : '') + (nat ? ' · ⚠ ' + nat + ' atípico' + (nat === 1 ? '' : 's') + ' o en cero' : '') + ' (no entran)</small></td><td><b>' + pobNum(S.prom, ind) + '</b></td><td>' + pobNum(S.med, ind) + '</td><td>' + (ind.neutro ? '–' : pobNum(mej, ind)) + '</td><td>' + (ind.neutro ? '–' : pobNum(peo, ind)) + '</td><td class="nw">' + pobNum(S.min, ind) + '–' + pobNum(S.max, ind) + '</td></tr>';
             }).join('') + '</tbody></table></div>' +
             POB_IND.filter(function (i) { return i.g === g; }).map(function (ind) {
               var S = pobStats(F, ind); if (!S.n || S.max === S.min) return '';
@@ -5920,7 +5955,7 @@
               return '<div class="genr"><span class="genl">' + esc(ind.t) + '</span><span class="genb"><i class="r"></i><i class="q" style="left:' + w(S.p25) + '%;width:' + (w(S.p75) - w(S.p25)).toFixed(1) + '%"></i><i class="m" style="left:' + w(S.med) + '%"></i><i class="p" style="left:' + w(S.prom) + '%"></i></span><span class="genx">' + pobNum(a, ind) + '–' + pobNum(b, ind) + (ind.u ? ' ' + ind.u : '') + '</span></div>';
             }).join('') + '</section>';
         }).join('') +
-        '<p class="cap">Prom.: promedio simple de los tambos o unidades (cada uno pesa igual). Med.: mediana (la mitad está por encima y la mitad por debajo). 25% mejor: el valor a partir del cual está el cuarto de mejores resultados; 25% peor: el límite del cuarto de peores. Debajo de cada indicador, cuántos tambos o unidades tienen dato, cuántos no entran por tener toro en el rodeo (marcados por el veterinario) y cuántos tienen un valor atípico (muy alejado del resto; se cuentan igual, pero conviene revisarlos). En las barras, la franja oscura va del 25% al 75% de los tambos, la raya es la mediana y el punto el promedio. Los tambos con varias unidades cuentan cada unidad con vacas por separado. Tasas de 21 días: solo filas con 30 aptas o más (concepción: 20 servicios con resultado).</p><p class="ifirma">Dr. Mauro Torterolo</p>';
+        '<p class="cap">Prom.: promedio simple de los tambos o unidades (cada uno pesa igual). Med.: mediana (la mitad está por encima y la mitad por debajo). 25% mejor: el valor a partir del cual está el cuarto de mejores resultados; 25% peor: el límite del cuarto de peores. Debajo de cada indicador, cuántos tambos o unidades tienen dato, cuántos no entran por tener toro en el rodeo (marcados por el veterinario) y cuántos tienen un valor atípico (muy alejado del resto) o están en cero donde el 0 es falta de registro: esos no entran en el promedio ni en los rangos. En los indicadores de servicios tampoco entran los tambos con concepción de más de 65% (toro probable). En las barras, la franja oscura va del 25% al 75% de los tambos, la raya es la mediana y el punto el promedio. Los tambos con varias unidades cuentan cada unidad con vacas por separado. Tasas de 21 días: solo filas con 30 aptas o más (concepción: 20 servicios con resultado).</p><p class="ifirma">Dr. Mauro Torterolo</p>';
     }
     // un tambo (o unidad) frente a la población: cada indicador con su semáforo (25% mejor, medio, 25% peor) y las referencias
     var SHX = null; // encabezado de la imagen compartida cuando el tambo no es el abierto
@@ -5947,15 +5982,15 @@
       var cards = grupos.map(function (g) {
         var filas = POB_IND.filter(function (i) { return i.g === g; }).map(function (ind) {
           var S = pobStats(F, ind); if (S.n < 4) return '';
-          var x = ind.val(f), sinT = ind.sinToro && toro;
+          var x = ind.val(f), sinT = ind.sinToro && (toro || f.toroAuto), exz = S.ex.filter(function (z) { return z.f === f; })[0];
           var mej = ind.alto ? S.p75 : S.p25, peo = ind.alto ? S.p25 : S.p75, c = 'neu';
-          if (x != null && !isNaN(x) && !ind.neutro && !sinT) {
+          if (x != null && !isNaN(x) && !ind.neutro && !sinT && !exz) {
             var bien = ind.alto ? x >= mej : x <= mej, malx = ind.alto ? x <= peo : x >= peo;
             c = bien ? 'ok' : malx ? 'mal' : 'med'; if (bien) cuenta.ok++; else if (malx) cuenta.mal++;
           }
           var val = x == null || isNaN(x) ? '–' : '<span class="tvp ' + c + '">' + pobFmt(x, ind).replace(/ (días|meses|años|L|puntos)$/, '') + '</span>';
           var sub = ind.sub ? ind.sub(f) : '';
-          return '<tr><td>' + esc(pobTit(ind)) + (sub ? '<small>' + esc(sub) + '</small>' : '') + (sinT ? '<small>con toro: no se compara</small>' : '') + '</td><td>' + val + '</td><td>' + (ind.neutro ? '–' : pobNum(mej, ind)) + '</td><td>' + pobNum(S.prom, ind) + '</td><td>' + (ind.neutro ? '–' : pobNum(peo, ind)) + '</td></tr>';
+          return '<tr><td>' + esc(pobTit(ind)) + (sub ? '<small>' + esc(sub) + '</small>' : '') + (sinT ? '<small>' + (toro ? 'con toro' : 'concepción de más de 65%: toro probable') + ', no se compara</small>' : exz ? '<small>' + exz.mot + ': no entra en la estadística</small>' : '') + '</td><td>' + val + '</td><td>' + (ind.neutro ? '–' : pobNum(mej, ind)) + '</td><td>' + pobNum(S.prom, ind) + '</td><td>' + (ind.neutro ? '–' : pobNum(peo, ind)) + '</td></tr>';
         }).join('');
         if (!filas) return '';
         return '<section class="card tvcard"><h2>' + esc(g) + '</h2><table class="tvtbl"><colgroup><col style="width:36%"><col style="width:19%"><col style="width:15%"><col style="width:14%"><col style="width:16%"></colgroup>' +
@@ -6007,6 +6042,9 @@
         fila('Otros eventos sanitarios', cnt(function (r) { return r.san >= 5; })) +
         fila('Celos', cnt(function (r) { return r.celos >= 10; }), '10 o más en el año') +
         fila('Vaquillonas y terneras cargadas', cnt(function (r) { return r.vaq >= 10; })) +
+        fila('Terneras registradas al nacer', F.filter(function (f) { return f.baj && f.baj.nacH >= 10 && f.baj.nac >= f.baj.nacH * 0.5; }).length, 'al menos la mitad de las hembras paridas') +
+        fila('Muertes de terneras anotadas', F.filter(function (f) { return f.baj && f.baj.nacM > 0; }).length) +
+        fila('Abortos anotados', F.filter(function (f) { return f.baj && f.baj.nAb > 0; }).length) +
         '</tbody></table><p class="cap">Lo que se cuenta es lo que está en la base, no lo que se hace en el tambo: un tambo puede tratar mastitis y no anotarlo.</p></section>';
       var PT = F.map(pobPartos), PTo = PT.filter(Boolean), cP = function (fn) { return PTo.filter(fn).length; }, pcP = function (k) { return PTo.length ? Math.round(k / PTo.length * 100) + '%' : '–'; };
       var c2b = '<section class="card"><h2>Partos</h2><div class="kpis kpis2"><div><b>' + pcP(cP(function (x) { return !x.nV; })) + '</b><span>paren todo el año</span></div><div><b>' + (PTo.length ? nf(med(PTo.map(function (x) { return x.p6; }))) + '%' : '–') + '</b><span>de los partos en sus 6 meses más fuertes (mediana)</span></div></div>' +
@@ -6029,7 +6067,7 @@
       return '<section class="card rkhead"><h2>Población de tambos · la muestra</h2><p class="cap">Cómo son los tambos y qué registran · ' + A.fmt(today()) + '</p></section>' + c1 + c2 + c3 + c4 + '<p class="ifirma">Dr. Mauro Torterolo</p>';
     }
     // panel de la población: cuadros con los indicadores clave (promedio y franja) y gráficos de toda la población
-    var PAN_IND = ['pren', 'serv', 'conc', 'p150', 'zPren', 'ipp', 'lv12', 'e1p', 'ejM', 'iep', 'salT', 'mInc'];
+    var PAN_IND = ['pren', 'serv', 'conc', 'p150', 'zPren', 'ipp', 'lv12', 'e1p', 'ejM', 'iep', 'salT', 'muV', 'mTer', 'mInc'];
     function pobPanelHTML(F) {
       tvCss();
       if (!document.getElementById('ppCss')) {
@@ -6092,7 +6130,7 @@
           '<p class="cap">Partos de cada mes (sin abortos) en % de la vaca masa promedio de toda la población, sumando los tambos: los grandes pesan más. Últimos 12 meses de cada respaldo.</p></section>';
       }
       // 3) tasa de servicio contra concepción: un punto por tambo (sin los marcados con toro)
-      var TT = pobToro(), P = F.filter(function (f) { return !TT[pobKey(f)]; }).map(function (f) { var T = pobT(f); return T && T.aptas >= 30 && T.sOk + T.sMal >= 20 ? { x: T.serv / T.aptas * 100, y: T.sOk / (T.sOk + T.sMal) * 100, t: f.sTodo } : null; }).filter(Boolean), dh = '';
+      var TT = pobToro(), P = F.filter(function (f) { return !TT[pobKey(f)] && !f.toroAuto; }).map(function (f) { var T = pobT(f); return T && T.aptas >= 30 && T.sOk + T.sMal >= 20 ? { x: T.serv / T.aptas * 100, y: T.sOk / (T.sOk + T.sMal) * 100, t: f.sTodo } : null; }).filter(Boolean), dh = '';
       if (P.length >= 3) {
         var W3 = 340, H3 = 230, l3 = 34, r3 = 10, t3 = 10, b3 = 34, x0s = 0, x1s = 100, y0s = 0, y1s = 80;
         P.forEach(function (q) { if (q.y > y1s) y1s = Math.min(100, Math.ceil(q.y / 10) * 10); });
