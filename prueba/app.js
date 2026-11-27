@@ -481,7 +481,7 @@
       // salida del rodeo: vacas adultas dadas de baja en los últimos 12 meses
       if (x.baja && x.baja >= d12 && x.baja <= ref && pa.length && pa[0][0] <= x.baja) {
         if (fn) { var ey = diffDays(x.baja, fn) / 365.25; if (ey > 1.5 && ey < 20) Z.salEdad.push(ey); }
-        var nl = Math.max.apply(null, pa.map(function (p) { return p[1] || 0; })); if (nl > 0) Z.salLac.push(nl);
+        var nl = Math.max.apply(null, pa.map(function (p) { return p[1] || 0; })); if (nl > 0 && nl <= 20) Z.salLac.push(nl);
       }
     });
     var m = function (v) { return v.length ? idxMedia(v) : null; };
@@ -1062,7 +1062,7 @@
         }
         var f = L[LOTE.i++]; state.destino = 'nuevo'; state.error = '';
         handleFile(f).then(function () {
-          if (state.error) { LOTE.mal.push(f.name); state.error = ''; }
+          if (state.error) { LOTE.mal.push(f.name); state.error = ''; } else LOTE.ok.push(f.name);
           setTimeout(paso, 50);
         });
       };
@@ -5742,6 +5742,54 @@
         });
         B.nAb = Object.keys(B.ab).length; delete B.ab; r.baj = B;
       } catch (e) {}
+      // más indicadores (nov 2026): vacías con más de 150 días, causas de baja, primer parto a los 24 meses, lactancias del rodeo,
+      // pico y persistencia de la lactancia, partos de otoño confirmados y días desde el último tacto
+      try {
+        var VV = DB.animales.filter(function (a) { return a.cat === 'vaca' || a.cat === 'seca'; });
+        if (VV.length >= 20) {
+          r.vac150 = VV.filter(function (a) { return a.estado !== 'prenada' && !a.rech && a.pFecha && A.diffDays(ref, a.pFecha) > 150; }).length / VV.length * 100;
+          var conN = VV.filter(function (a) { return a.pN > 0 && a.pN <= 20; });
+          if (conN.length >= 20) { r.l3 = conN.filter(function (a) { return a.pN >= 3; }).length / conN.length * 100; r.l1 = conN.filter(function (a) { return a.pN === 1; }).length / conN.length * 100; }
+          r.lacMal = VV.filter(function (a) { return a.pN > 20; }).length;
+        }
+        // causas de las bajas de vacas (12 meses), por palabras de la causa anotada
+        var dC3 = A.addDays(ref, -365), CZ = { n: 0, con: 0, rep: 0, mas: 0, pat: 0, pro: 0 };
+        infLista().forEach(function (x) {
+          var a = x.a, b = a.bFecha; if (!b || b <= dC3 || b > ref || !(x.h.pa || []).length || !enSel(unidadEn(x, b))) return;
+          CZ.n++; var c = String(a.bCausa || '').toLowerCase(); if (!c) return; CZ.con++;
+          if (/repro|vac[ií]a|infert|preñ|pren|abort|celo|quist/.test(c)) CZ.rep++;
+          else if (/mast|ubre|pez[oó]n|c[eé]lul|rcs|cuarto/.test(c)) CZ.mas++;
+          else if (/pata|cojer|renqu|podal|pezu|casco|locomo|aplom/.test(c)) CZ.pat++;
+          else if (/produc|leche|litro/.test(c)) CZ.pro++;
+        });
+        r.cz = CZ;
+        // primer parto a los 24 meses o menos: vaquillonas que parieron en los últimos 2 años
+        var d24b = A.addDays(ref, -730), e1 = [];
+        infLista().forEach(function (x) { var h = x.h, p1 = (h.pa || [])[0]; if (!p1 || p1[1] !== 1 || p1[0] < d24b || !h.fn || !enSel(unidadEn(x, p1[0]))) return; var m = A.diffDays(p1[0], h.fn) / 30.44; if (m > 17 && m < 50) e1.push(m); });
+        if (e1.length >= 10) r.p24 = e1.filter(function (m) { return m <= 24.5; }).length / e1.length * 100;
+        // pico (máximo de 30 a 100 días en leche) y persistencia (promedio de 150 a 250 días ÷ pico) de las lactancias con controles
+        var pk = { p: [], m: [], per: [] }, d15 = A.addDays(ref, -540);
+        infLista().forEach(function (x) {
+          var h = x.h, pa = h.pa || [], ct = h.ct || []; if (!ct.length) return;
+          pa.forEach(function (p, i) {
+            if (p[0] < d15 || /^A/.test(p[2] || '') || !enSel(unidadEn(x, p[0]))) return;
+            var hasta = pa[i + 1] ? pa[i + 1][0] : '9999', c = ct.filter(function (q) { return q[0] > p[0] && q[0] < hasta && q[1] > 0; }).map(function (q) { return [A.diffDays(q[0], p[0]), q[1]]; });
+            var a1 = c.filter(function (q) { return q[0] >= 30 && q[0] <= 100; }); if (!a1.length) return;
+            var pico = Math.max.apply(null, a1.map(function (q) { return q[1]; })); (p[1] === 1 ? pk.p : pk.m).push(pico);
+            var b1 = c.filter(function (q) { return q[0] >= 150 && q[0] <= 250; }); if (b1.length) pk.per.push(b1.reduce(function (t, q) { return t + q[1]; }, 0) / b1.length / pico * 100);
+          });
+        });
+        var av = function (v) { return v.length >= 10 ? v.reduce(function (t, x2) { return t + x2; }, 0) / v.length : null; };
+        r.picoP = av(pk.p); r.picoM = av(pk.m); r.pers = av(pk.per);
+        // partos de otoño (febrero a mayo) confirmados por tacto para el año que viene, contra los partos del otoño pasado
+        var yO = +ref.slice(0, 4) + (ref.slice(5, 7) > '05' ? 1 : 0), oA = (yO - 1) + '-02-01', oB = (yO - 1) + '-05-31', nA = yO + '-02-01', nB = yO + '-05-31', pasO = 0, conf = 0;
+        infLista().forEach(function (x) { (x.h.pa || []).forEach(function (p) { if (p[0] >= oA && p[0] <= oB && !/^A/.test(p[2] || '') && enSel(unidadEn(x, p[0]))) pasO++; }); });
+        DB.animales.forEach(function (a) { if (a.estado === 'prenada' && a.partoProb && a.partoProb >= nA && a.partoProb <= nB) conf++; });
+        if (pasO >= 20) r.oto = { pas: pasO, conf: conf, y: yO };
+        // días desde la última visita de tacto, a la fecha del respaldo y a hoy
+        if (r.reg && r.reg.ultT != null) r.ultTacto = r.reg.ultT;
+        r.diasResp = A.diffDays(today(), ref);
+      } catch (e) {}
       // mastitis: la misma cuenta que la tarjeta de Leche (casos y vacas tratadas en los últimos 12 meses)
       try { POBX = {}; mastitisHTML(); if (POBX.mast) r.mast = POBX.mast; } catch (e) {} finally { POBX = null; }
     }
@@ -5819,13 +5867,20 @@
       { k: 'conc', sinToro: true, g: 'Reproducción', t: 'Tasa de concepción', u: '%', alto: true, d: 0, val: function (f) { var T = pobT(f); return T && T.sOk + T.sMal >= 20 ? T.sOk / (T.sOk + T.sMal) * 100 : null; }, nota: 'Servicios que preñaron / servicios con resultado, ciclos cerrados (temporada o últimos 12 meses, según el tipo de servicio).' },
       { k: 'pren', sinToro: true, g: 'Reproducción', t: 'Tasa de preñez (21 días)', u: '%', alto: true, d: 0, val: function (f) { var T = pobT(f); return T && T.aptas >= 30 ? T.pren / T.aptas * 100 : null; }, nota: 'Aptas que se preñan en el ciclo / aptas, ciclos cerrados (temporada o últimos 12 meses, según el tipo de servicio).' },
       { k: 'prenA', sinToro: true, g: 'Reproducción', t: 'Tasa de preñez año anterior', u: '%', alto: true, d: 0, val: function (f) { var T = f.sTodo ? f.T12A : f.TA; return T && T.aptas >= 30 ? T.pren / T.aptas * 100 : null; }, nota: 'La misma cuenta un año antes: la temporada pasada o los 12 meses anteriores.' },
+      { k: 'vac150', cero: true, g: 'Reproducción', t: 'Vacas vacías con más de 150 días en leche', u: '%', alto: false, d: 0, val: function (f) { return f.vac150; }, nota: 'Vacas (en ordeñe y secas) sin preñez confirmada, sin descarte programado y con más de 150 días de paridas, en % de todas las vacas, a la fecha del respaldo. El problema reproductivo acumulado.' },
+      { k: 'oto', g: 'Reproducción', t: 'Partos de otoño confirmados, contra el otoño pasado', u: '%', alto: true, d: 0, sub: function (f) { return f.oto ? f.oto.conf + ' preñeces confirmadas · ' + f.oto.pas + ' partos el otoño pasado' : ''; }, val: function (f) { return f.oto ? f.oto.conf / f.oto.pas * 100 : null; }, nota: 'Preñadas por tacto (vacas y vaquillonas) con parto probable de febrero a mayo del año que viene, en % de los partos de febrero a mayo de este año. Solo lo confirmado: sube a medida que se tacta.' },
       { k: 'p150', g: 'Reproducción', t: 'Preñadas a 150 días en leche, últimos 12 meses', u: '%', alto: true, d: 0, val: function (f) { return f.p150; }, nota: 'Vacas que cumplieron 150 días en leche en los últimos 12 meses y se preñaron antes. No depende de la época de servicio.' },
       { k: 'pg', g: 'Reproducción', t: '% preñez general', u: '%', alto: true, d: 0, val: function (f) { return f.pg; }, nota: 'Vacas preñadas en la temporada / vacas aptas al inicio (como el informe anual).' },
       { k: 'ips', sinToro: true, g: 'Reproducción', t: 'Intervalo parto – 1er servicio', u: 'días', alto: false, d: 0, val: function (f) { return f.ips; }, nota: 'Días promedio, temporada actual.' },
       { k: 'ipp', g: 'Reproducción', t: 'Intervalo parto – preñez', u: 'días', alto: false, d: 0, val: function (f) { return f.ipp; }, nota: 'Días promedio, temporada actual.' },
       { k: 'spp', sinToro: true, g: 'Reproducción', t: 'Servicios por preñez', u: '', alto: false, d: 1, val: function (f) { return f.spp; }, nota: 'Servicios de la temporada / preñeces de la temporada. Sube si falta tactar.' },
       { k: 'lv', g: 'Leche', t: 'Litros por vaca, último control', u: 'L', alto: true, d: 1, val: function (f) { return f.lv; }, nota: 'Litros por vaca en ordeñe en el último control (ronda de todas las unidades).' },
+      { k: 'picoP', g: 'Leche', t: 'Pico de lactancia, primíparas', u: 'L', alto: true, d: 1, val: function (f) { return f.picoP; }, nota: 'Promedio del control más alto entre 30 y 100 días en leche, lactancias de los últimos 18 meses. Mínimo 10 lactancias.' },
+      { k: 'picoM', g: 'Leche', t: 'Pico de lactancia, multíparas', u: 'L', alto: true, d: 1, val: function (f) { return f.picoM; }, nota: 'La misma cuenta en vacas de 2ª lactancia o más.' },
+      { k: 'pers', g: 'Leche', t: 'Persistencia de la lactancia', u: '%', alto: true, d: 0, val: function (f) { return f.pers; }, nota: 'Litros promedio de los controles de 150 a 250 días en leche ÷ pico de la misma lactancia × 100.' },
       { k: 'lv12', g: 'Leche', t: 'Litros por vaca, últimos 12 meses', u: 'L', alto: true, d: 1, val: function (f) { return f.lv12; }, nota: 'Promedio de los controles de los últimos 12 meses.' },
+      { k: 'l3', g: 'Rodeo', t: 'Vacas de 3ª lactancia o más', u: '%', alto: true, d: 0, val: function (f) { return f.l3; }, nota: 'Vacas en ordeñe y secas de 3ª lactancia o más, en % de las vacas: la vida productiva del rodeo.' },
+      { k: 'l1', g: 'Rodeo', t: 'Primíparas en el rodeo', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.l1; }, nota: 'Vacas de 1ª lactancia en % de las vacas en ordeñe y secas.' },
       { k: 'po', g: 'Rodeo', t: '% de vacas en ordeñe', u: '%', alto: true, d: 0, val: function (f) { return f.vo != null && f.vo + f.vs ? f.vo / (f.vo + f.vs) * 100 : null; }, nota: 'Vacas en ordeñe / (en ordeñe + secas), promedio de los últimos 12 meses.' },
       { k: 'vacas', g: 'Rodeo', t: 'Vacas (en ordeñe y secas)', u: '', alto: true, d: 0, neutro: true, val: function (f) { return f.vacas || null; }, nota: 'Tamaño del rodeo de vacas a la fecha del respaldo.' },
       { k: 'iep', g: 'Rodeo', t: 'Intervalo entre partos', u: 'días', alto: false, d: 0, val: function (f) { return f.vida && f.vida.iep; }, nota: 'Días entre partos de los partos de los últimos 2 años (Línea de vida).' },
@@ -5834,6 +5889,10 @@
       { k: 'muV', cero: true, g: 'Bajas', t: 'Mortandad de vacas', u: '%', alto: false, d: 1, val: function (f) { return f.baj && f.vm >= 20 ? f.baj.mu / f.vm * 100 : null; }, nota: 'Vacas (con al menos un parto) muertas en los últimos 12 meses en % de la vaca masa promedio (ordeñe + secas).' },
       { k: 'veV', g: 'Bajas', t: 'Vacas vendidas', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.baj && f.vm >= 20 ? f.baj.ve / f.vm * 100 : null; }, nota: 'Vacas vendidas en los últimos 12 meses en % de la vaca masa promedio.' },
       { k: 'repo', g: 'Bajas', t: 'Salidas de vacas (reposición necesaria)', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.baj && f.vm >= 20 ? (f.baj.mu + f.baj.ve + f.baj.ot) / f.vm * 100 : null; }, nota: 'Todas las vacas que salieron (muertas, vendidas u otras bajas) en los últimos 12 meses en % de la vaca masa: las vaquillonas que hacen falta para mantener el rodeo.' },
+      { k: 'czRep', cero: true, g: 'Bajas', t: 'Salidas por reproducción', u: '%', alto: false, d: 0, val: function (f) { return f.cz && f.cz.con >= 10 && f.cz.con >= f.cz.n * 0.5 ? f.cz.rep / f.cz.con * 100 : null; }, nota: 'Bajas de vacas de los últimos 12 meses con causa de reproducción (vacía, infértil, aborto, quistes), en % de las bajas con causa anotada. Solo tambos que anotan la causa en al menos la mitad de las bajas.' },
+      { k: 'czMas', cero: true, g: 'Bajas', t: 'Salidas por mastitis o ubre', u: '%', alto: false, d: 0, val: function (f) { return f.cz && f.cz.con >= 10 && f.cz.con >= f.cz.n * 0.5 ? f.cz.mas / f.cz.con * 100 : null; }, nota: 'Bajas con causa de mastitis, ubre o células, en % de las bajas con causa.' },
+      { k: 'czPat', cero: true, g: 'Bajas', t: 'Salidas por patas', u: '%', alto: false, d: 0, val: function (f) { return f.cz && f.cz.con >= 10 && f.cz.con >= f.cz.n * 0.5 ? f.cz.pat / f.cz.con * 100 : null; }, nota: 'Bajas con causa de patas o cojeras, en % de las bajas con causa.' },
+      { k: 'czPro', cero: true, g: 'Bajas', t: 'Salidas por producción', u: '%', alto: null, neutro: true, d: 0, val: function (f) { return f.cz && f.cz.con >= 10 && f.cz.con >= f.cz.n * 0.5 ? f.cz.pro / f.cz.con * 100 : null; }, nota: 'Bajas por baja producción, en % de las bajas con causa (descarte voluntario).' },
       { k: 'abo', g: 'Bajas', t: 'Abortos', u: '%', alto: false, d: 1, val: function (f) { return f.baj && f.baj.pa + f.baj.nAb >= 30 ? f.baj.nAb / (f.baj.pa + f.baj.nAb) * 100 : null; }, nota: 'Abortos anotados en los últimos 12 meses / (partos + abortos). Depende de que se anoten.' },
       { k: 'mTer', g: 'Bajas', t: 'Mortandad de terneras hasta 90 días', u: '%', alto: false, d: 1, sub: function (f) { return f.baj ? f.baj.nac + ' terneras registradas de ' + f.baj.nacH + ' partos de hembra' : ''; }, val: function (f) { var B = f.baj; return B && B.nacH >= 10 && B.nac >= 10 && B.nac >= B.nacH * 0.5 ? B.nacM / B.nac * 100 : null; }, nota: 'Terneras nacidas entre 15 y 3 meses atrás (con 90 días de seguimiento) que murieron antes de los 90 días / terneras nacidas registradas. Solo tambos que registran al nacer al menos la mitad de las hembras paridas.' },
       { k: 'ejM', g: 'Rodeo', t: 'Partos de multíparas, último ejercicio', u: '%', alto: true, d: 0, sub: function (f) { return f.ej && f.ej[0] ? 'Ejercicio ' + f.ej[0].lbl + ' · ' + f.ej[0].nM + ' partos' : ''; }, val: function (f) { return f.ej && f.ej[0] ? f.ej[0].pm : null; }, nota: 'Partos de vacas (2ª lactancia o más, sin abortos) del último ejercicio cerrado (julio a junio) en % de la vaca masa promedio (ordeñe + secas) de ese ejercicio.' },
@@ -5850,6 +5909,7 @@
       { k: 'zPerd', cero: true, g: 'Cierre de zafra', t: 'Pérdida de preñez', u: '%', alto: false, d: 1, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.conf >= 20 ? R.perd / R.conf * 100 : null; }, nota: 'Preñeces confirmadas por tacto que se perdieron después (aborto o tacto vacía).' },
       { k: 'zExc', cero: true, g: 'Cierre de zafra', t: 'Excluidas de la zafra', u: '%', alto: false, d: 0, neutro: true, val: function (f) { var R = !f.sTodo && f.zc && f.zc.R; return R && R.n0 ? (R.desc + R.antes + (R.pase || 0)) / R.n0 * 100 : null; }, nota: 'Descartes programados y vacas que se fueron antes de la espera voluntaria, sobre todas las vacas de la zafra.' },
       { k: 'zDif', cero: true, g: 'Cierre de zafra', t: 'Zafra actual contra la anterior', u: 'puntos', alto: true, d: 0, val: function (f) { return !f.sTodo && f.zDif ? f.zDif.d : null; }, nota: 'Preñez acumulada de la zafra en curso menos la de la zafra anterior en la misma semana de servicios. No entra si faltan tactar servicios (más de 5 puntos entre lo confirmado y lo posible).' },
+      { k: 'p24', g: 'Recría y vaquillonas', t: 'Primer parto a los 24 meses o menos', u: '%', alto: true, d: 0, val: function (f) { return f.p24; }, nota: 'Vaquillonas que parieron en los últimos 2 años con 24 meses o menos de edad, en % de las que tienen fecha de nacimiento.' },
       { k: 'e1s', g: 'Recría y vaquillonas', t: 'Edad al primer servicio', u: 'meses', alto: false, d: 1, val: function (f) { return f.vida && f.vida.e1s; }, nota: 'Vaquillonas que parieron en los últimos 2 años (Línea de vida).' },
       { k: 'e1p', g: 'Recría y vaquillonas', t: 'Edad al primer parto', u: 'meses', alto: false, d: 1, val: function (f) { return f.vida && f.vida.e1p; }, nota: 'Vaquillonas que parieron en los últimos 2 años. Si el tambo no tiene las vaquillonas cargadas, no hay dato.' },
       { k: 'vC1', g: 'Recría y vaquillonas', t: 'Concepción 1er servicio vaquillonas', u: '%', alto: true, d: 0, val: function (f) { return f.vaq && f.vaq.c1; }, nota: 'Última zafra completa de vaquillonas (1 de mayo al 30 de abril).' },
@@ -6044,6 +6104,10 @@
         fila('Vaquillonas y terneras cargadas', cnt(function (r) { return r.vaq >= 10; })) +
         fila('Terneras registradas al nacer', F.filter(function (f) { return f.baj && f.baj.nacH >= 10 && f.baj.nac >= f.baj.nacH * 0.5; }).length, 'al menos la mitad de las hembras paridas') +
         fila('Muertes de terneras anotadas', F.filter(function (f) { return f.baj && f.baj.nacM > 0; }).length) +
+        fila('Vacas con número de lactancia sin sentido', F.filter(function (f) { return f.lacMal > 0; }).length, F.some(function (f) { return f.lacMal > 0; }) ? 'más de 20: ' + F.filter(function (f) { return f.lacMal > 0; }).map(function (f) { return esc(f.nombre) + ' (' + f.lacMal + ')'; }).join(', ') + '. Volver a cargar la base.' : 'más de 20 lactancias') +
+        fila('Causa de baja anotada', F.filter(function (f) { return f.cz && f.cz.n >= 5 && f.cz.con >= f.cz.n * 0.5; }).length, 'en al menos la mitad de las bajas de vacas') +
+        fila('Último tacto hace más de 30 días', F.filter(function (f) { return f.ultTacto != null && f.ultTacto > 30; }).length, 'a la fecha del respaldo') +
+        fila('Respaldo de hace más de 60 días', F.filter(function (f) { return f.diasResp > 60; }).length) +
         fila('Abortos anotados', F.filter(function (f) { return f.baj && f.baj.nAb > 0; }).length) +
         '</tbody></table><p class="cap">Lo que se cuenta es lo que está en la base, no lo que se hace en el tambo: un tambo puede tratar mastitis y no anotarlo.</p></section>';
       var PT = F.map(pobPartos), PTo = PT.filter(Boolean), cP = function (fn) { return PTo.filter(fn).length; }, pcP = function (k) { return PTo.length ? Math.round(k / PTo.length * 100) + '%' : '–'; };
@@ -6061,13 +6125,13 @@
         '<p class="cap">Una visita es un día con 5 vacas tactadas o más (dos días seguidos cuentan como una). La frecuencia es la mediana de los días entre visitas de cada tambo.</p></section>';
       var S = F.slice().sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); });
       var si = function (b) { return b ? '✓' : '–'; };
-      var c4 = '<section class="card"><h2>Cada tambo</h2><div style="overflow-x:auto;max-width:100%"><table class="tbl tvtbl" style="table-layout:auto;font-size:12.5px;min-width:520px"><thead><tr><th style="text-align:left">Tambo</th><th>Vacas</th><th>Meses con control</th><th>Comp.</th><th>Cél.</th><th>Mastitis (casos)</th><th>Tactos al año</th><th>Cada (días)</th><th>Partos</th></tr></thead><tbody>' +
-        S.map(function (f) { var r = f.reg || {}, pt = pobPartos(f); return '<tr><td>' + esc(f.nombre) + '</td><td>' + nf(f.vacas || 0) + '</td><td>' + (r.meses != null ? r.meses : '–') + '</td><td>' + si(r.mComp >= 3) + '</td><td>' + si(r.mRcs >= 3) + '</td><td>' + (r.mast != null ? nf(r.mast) : '–') + '</td><td>' + (r.tactos != null ? r.tactos : '–') + '</td><td>' + (r.tInt != null ? r.tInt : '–') + '</td><td style="text-align:left">' + (pt ? pt.txt : '–') + '</td></tr>'; }).join('') +
+      var c4 = '<section class="card"><h2>Cada tambo</h2><div style="overflow-x:auto;max-width:100%"><table class="tbl tvtbl" style="table-layout:auto;font-size:12.5px;min-width:520px"><thead><tr><th style="text-align:left">Tambo</th><th>Vacas</th><th>Meses con control</th><th>Comp.</th><th>Cél.</th><th>Mastitis (casos)</th><th>Tactos al año</th><th>Cada (días)</th><th>Último tacto (días)</th><th>Partos</th></tr></thead><tbody>' +
+        S.map(function (f) { var r = f.reg || {}, pt = pobPartos(f); return '<tr><td>' + esc(f.nombre) + '</td><td>' + nf(f.vacas || 0) + '</td><td>' + (r.meses != null ? r.meses : '–') + '</td><td>' + si(r.mComp >= 3) + '</td><td>' + si(r.mRcs >= 3) + '</td><td>' + (r.mast != null ? nf(r.mast) : '–') + '</td><td>' + (r.tactos != null ? r.tactos : '–') + '</td><td>' + (r.tInt != null ? r.tInt : '–') + '</td><td>' + (f.ultTacto != null ? f.ultTacto + (f.diasResp > 7 ? '<small>+' + f.diasResp + ' hasta hoy</small>' : '') : '–') + '</td><td style="text-align:left">' + (pt ? pt.txt : '–') + '</td></tr>'; }).join('') +
         '</tbody></table></div><p class="cap">Últimos 12 meses hasta la fecha del respaldo de cada tambo.</p></section>';
       return '<section class="card rkhead"><h2>Población de tambos · la muestra</h2><p class="cap">Cómo son los tambos y qué registran · ' + A.fmt(today()) + '</p></section>' + c1 + c2 + c3 + c4 + '<p class="ifirma">Dr. Mauro Torterolo</p>';
     }
     // panel de la población: cuadros con los indicadores clave (promedio y franja) y gráficos de toda la población
-    var PAN_IND = ['pren', 'serv', 'conc', 'p150', 'zPren', 'ipp', 'lv12', 'e1p', 'ejM', 'iep', 'salT', 'muV', 'mTer', 'mInc'];
+    var PAN_IND = ['pren', 'serv', 'conc', 'p150', 'vac150', 'zPren', 'oto', 'ipp', 'lv12', 'pers', 'e1p', 'p24', 'ejM', 'l3', 'iep', 'salT', 'muV', 'czRep', 'mTer', 'mInc'];
     function pobPanelHTML(F) {
       tvCss();
       if (!document.getElementById('ppCss')) {
